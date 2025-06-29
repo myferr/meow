@@ -2,11 +2,15 @@
 
 **meow** is a terminal-based IRC client written in Rust, with built-in support for TLS and SSL.
 
-A waitlist site is coming soon!
+[Join the waitlist!](https://meow-irc.vercel.app)
+
+---
 
 ## Disclaimer
 
 This project is currently in active development. Please do not use it in production yet, the project is not ready for daily usage. You're welcome to contribute, thank you!
+
+---
 
 ## To-do
 
