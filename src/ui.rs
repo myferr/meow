@@ -3,7 +3,7 @@ use crossterm::{
     cursor,
     event::{self, Event, KeyCode},
     execute,
-    style::{Color, ResetColor, SetForegroundColor},
+    style::{Attribute, Color, ResetColor, SetAttribute, SetForegroundColor},
     terminal::{
         disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
         LeaveAlternateScreen,
@@ -25,37 +25,35 @@ pub async fn run_ui(
 
     let mut input = String::new();
     let mut messages: VecDeque<String> = VecDeque::with_capacity(100);
-    let max_width = 80; // Maximum width for messages to prevent overflow
-    let left_padding = 2; // Left padding for alignment
+    let mut scroll_offset: usize = 0;
+    let mut input_history: Vec<String> = Vec::new();
+    let mut input_history_index: Option<usize> = None;
 
-    // Function to pad and truncate messages (Unicode/grapheme-aware)
+    let max_width = 80;
+    let left_padding = 2;
+
     fn format_message(msg: &str, max_width: usize, left_padding: usize) -> String {
         let available_width = max_width.saturating_sub(left_padding);
         let graphemes: Vec<&str> = UnicodeSegmentation::graphemes(msg, true).collect();
-        let truncated: String = if graphemes.len() > available_width {
-            graphemes[..available_width].concat()
-        } else {
-            graphemes.concat()
-        };
+        let truncated: String = graphemes.into_iter().take(available_width).collect();
         format!("{:width$}{}", "", truncated, width = left_padding)
     }
 
-    // Print the welcome box
     execute!(stdout, Clear(ClearType::All))?;
     let lines = [
-        "┌──────────────────────────────────────────────────┐",
-        "⎹              Welcome to meow IRC Client          ⎹",
-        "+--------------------------------------------------+",
-        "⎹ Available Commands:                              ⎹",
-        "⎹                                                  ⎹",
-        "⎹  /connect <server> <port> <nick> <tls?           ⎹",
-        "⎹  /join <#channel>                                ⎹",
-        "⎹  /part <#channel>                                ⎹",
-        "⎹  /msg <target> <message>                         ⎹",
-        "⎹  /quit                                           ⎹",
-        "└─────────────────────────────────────────────────┘",
+        "╭────────────────────────────────────────────────────────────╮",
+        "│              \x1b[1mWelcome to meow IRC Client\x1b[0m              │",
+        "├────────────────────────────────────────────────────────────┤",
+        "│  \x1b[3mAvailable Commands:\x1b[0m                                  │",
+        "│                                                            │",
+        "│  \x1b[1m/connect <server> <port> <nick>\x1b[0m                 │",
+        "│  \x1b[1m/join <#channel>\x1b[0m                                │",
+        "│  \x1b[1m/part <#channel>\x1b[0m                                │",
+        "│  \x1b[1m/msg <target> <message>\x1b[0m                         │",
+        "│  \x1b[1m/quit\x1b[0m                                           │",
+        "╰────────────────────────────────────────────────────────────╯",
         "",
-        "Press Enter to continue...",
+        "Press \x1b[1mEnter\x1b[0m to continue...",
     ];
 
     execute!(stdout, SetForegroundColor(Color::Cyan))?;
@@ -66,7 +64,6 @@ pub async fn run_ui(
     execute!(stdout, ResetColor)?;
     stdout.flush()?;
 
-    // Wait for user confirmation
     loop {
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
@@ -77,7 +74,6 @@ pub async fn run_ui(
         }
     }
 
-    // Clear the screen and start the input prompt
     execute!(stdout, cursor::MoveTo(0, 0), Clear(ClearType::All))?;
     stdout.flush()?;
 
@@ -92,35 +88,41 @@ pub async fn run_ui(
         }
 
         execute!(stdout, cursor::MoveTo(0, 0), Clear(ClearType::All))?;
-
-        // Display header
-        execute!(stdout, SetForegroundColor(Color::Blue))?;
+        execute!(
+            stdout,
+            SetForegroundColor(Color::Blue),
+            SetAttribute(Attribute::Bold)
+        )?;
         writeln!(
             stdout,
-            "{}meow IRC Client | Type /help for commands. ESC to quit.",
+            "{}╭─ meow IRC Client ── Type /help for commands. ESC to quit ─╮",
             " ".repeat(left_padding)
         )?;
         execute!(stdout, ResetColor)?;
 
-        // Display messages
         let height = 20;
-        let start = if messages.len() > height {
-            messages.len() - height
+        let start = if messages.len() > height + scroll_offset {
+            messages.len() - height - scroll_offset
         } else {
             0
         };
-        for (i, msg) in messages.iter().skip(start).enumerate() {
+        let end = messages.len().saturating_sub(scroll_offset);
+
+        for (i, msg) in messages.iter().take(end).skip(start).enumerate() {
             execute!(stdout, cursor::MoveTo(0, (i + 2) as u16))?;
             writeln!(stdout, "{}", msg)?;
         }
 
-        // Display input prompt
         execute!(stdout, cursor::MoveTo(0, (height + 2) as u16))?;
         writeln!(stdout)?;
-        execute!(stdout, SetForegroundColor(Color::Green))?;
+        execute!(
+            stdout,
+            SetForegroundColor(Color::Green),
+            SetAttribute(Attribute::Bold)
+        )?;
         write!(
             stdout,
-            "{}> {}",
+            "{}❯ {}",
             " ".repeat(left_padding),
             format_message(&input, max_width - 2, 0)
         )?;
@@ -132,11 +134,19 @@ pub async fn run_ui(
                 match key.code {
                     KeyCode::Char(c) => {
                         input.push(c);
+                        input_history_index = None;
                     }
                     KeyCode::Backspace => {
                         input.pop();
+                        input_history_index = None;
                     }
                     KeyCode::Enter => {
+                        if !input.trim().is_empty() {
+                            input_history.push(input.clone());
+                        }
+                        input_history_index = None;
+                        scroll_offset = 0;
+
                         if input.starts_with('/') {
                             let mut parts = input.splitn(2, ' ');
                             let cmd = parts.next().unwrap_or("");
@@ -149,8 +159,6 @@ pub async fn run_ui(
                                     let port =
                                         args.next().unwrap_or("6697").parse().unwrap_or(6697);
                                     let nick = args.next().unwrap_or("rusty").to_string();
-
-                                    // Parse TLS option (default true)
                                     let tls = args
                                         .next()
                                         .map(|v| {
@@ -179,7 +187,6 @@ pub async fn run_ui(
                                                 tls,
                                             })
                                             .await?;
-
                                         messages.push_back(format_message(
                                             &format!(
                                                 "You: /connect {} {} {}",
@@ -243,15 +250,15 @@ pub async fn run_ui(
                                 }
                                 "/help" => {
                                     let help_lines = [
-                                        "┌─────────────────────────────────────────────┐",
-                                        "|                 Help Menu                   |",
-                                        "+---------------------------------------------+",
-                                        "| /connect <server> [port] [nick] [tls?]      |",
-                                        "| /join <channel>                             |",
-                                        "| /part <channel>                             |",
-                                        "| /msg <target> <message>                     |",
-                                        "| /quit                                       |",
-                                        "└─────────────────────────────────────────────┘",
+                                        "╭───────────────────────────────────────────────╮",
+                                        "│                   Help Menu                  │",
+                                        "├───────────────────────────────────────────────┤",
+                                        "│ /connect <server> [port] [nick]              │",
+                                        "│ /join <channel>                              │",
+                                        "│ /part <channel>                              │",
+                                        "│ /msg <target> <message>                      │",
+                                        "│ /quit                                        │",
+                                        "╰───────────────────────────────────────────────╯",
                                     ];
                                     messages.push_back(format_message(
                                         "You: /help",
@@ -287,6 +294,49 @@ pub async fn run_ui(
                         input_tx.send(InputCommand::Quit).await?;
                         messages.push_back(format_message("You: /quit", max_width, left_padding));
                         running = false;
+                    }
+                    KeyCode::PageUp => {
+                        scroll_offset += 5;
+                        if scroll_offset > messages.len().saturating_sub(1) {
+                            scroll_offset = messages.len().saturating_sub(1);
+                        }
+                    }
+                    KeyCode::PageDown => {
+                        scroll_offset = scroll_offset.saturating_sub(5);
+                    }
+                    KeyCode::Up => {
+                        if input_history.is_empty() {
+                            continue;
+                        }
+                        match input_history_index {
+                            Some(0) => {}
+                            Some(i) => input_history_index = Some(i - 1),
+                            None => {
+                                input_history_index = Some(input_history.len().saturating_sub(1))
+                            }
+                        }
+                        if let Some(i) = input_history_index {
+                            if let Some(entry) = input_history.get(i) {
+                                input = entry.clone();
+                            }
+                        }
+                    }
+                    KeyCode::Down => {
+                        if input_history.is_empty() {
+                            continue;
+                        }
+                        match input_history_index {
+                            Some(i) if i + 1 < input_history.len() => {
+                                input_history_index = Some(i + 1);
+                                if let Some(entry) = input_history.get(i + 1) {
+                                    input = entry.clone();
+                                }
+                            }
+                            _ => {
+                                input_history_index = None;
+                                input.clear();
+                            }
+                        }
                     }
                     _ => {}
                 }
