@@ -56,7 +56,8 @@ export default function Waitlist() {
         <div className="w-full max-w-md space-y-4">
           <h1 className="text-2xl font-bold">meow is coming soon</h1>
           <p className="text-sm text-gray-500">
-            A modern terminal IRC client. Join the waitlist for early access.
+            A modern terminal IRC client. Join the waitlist to stay up-to-date
+            on updates.
           </p>
           {subscribed ? (
             <div className="p-4 border rounded bg-green-50 text-green-700">
