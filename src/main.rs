@@ -54,17 +54,17 @@ pub fn print_welcome_box() {
     let mut out = stdout();
 
     let lines = [
+        "┌──────────────────────────────────────────────────┐",
+        "⎹              Welcome to meow IRC Client          ⎹",
         "+--------------------------------------------------+",
-        "|              Welcome to meow IRC Client          |",
-        "+--------------------------------------------------+",
-        "| Available Commands:                              |",
-        "|                                                  |",
-        "|  /connect <server> <port> <nick>                 |",
-        "|  /join <#channel>                                |",
-        "|  /part <#channel>                                |",
-        "|  /msg <target> <message>                         |",
-        "|  /quit                                           |",
-        "+--------------------------------------------------+",
+        "⎹ Available Commands:                              ⎹",
+        "⎹                                                  ⎹",
+        "⎹  /connect <server> <port> <nick> <tls?>          ⎹",
+        "⎹  /join <#channel>                                ⎹",
+        "⎹  /part <#channel>                                ⎹",
+        "⎹  /msg <target> <message>                         ⎹",
+        "⎹  /quit                                           ⎹",
+        "└─────────────────────────────────────────────────┘",
         "",
     ];
 

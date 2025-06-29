@@ -13,6 +13,7 @@ use std::collections::VecDeque;
 use std::io::{stdout, Write};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::Duration;
+use unicode_segmentation::UnicodeSegmentation;
 
 pub async fn run_ui(
     input_tx: Sender<InputCommand>,
@@ -27,13 +28,14 @@ pub async fn run_ui(
     let max_width = 80; // Maximum width for messages to prevent overflow
     let left_padding = 2; // Left padding for alignment
 
-    // Function to pad and truncate messages
+    // Function to pad and truncate messages (Unicode/grapheme-aware)
     fn format_message(msg: &str, max_width: usize, left_padding: usize) -> String {
         let available_width = max_width.saturating_sub(left_padding);
-        let truncated = if msg.len() > available_width {
-            &msg[..available_width]
+        let graphemes: Vec<&str> = UnicodeSegmentation::graphemes(msg, true).collect();
+        let truncated: String = if graphemes.len() > available_width {
+            graphemes[..available_width].concat()
         } else {
-            msg
+            graphemes.concat()
         };
         format!("{:width$}{}", "", truncated, width = left_padding)
     }
@@ -41,17 +43,17 @@ pub async fn run_ui(
     // Print the welcome box
     execute!(stdout, Clear(ClearType::All))?;
     let lines = [
+        "┌──────────────────────────────────────────────────┐",
+        "⎹              Welcome to meow IRC Client          ⎹",
         "+--------------------------------------------------+",
-        "|              Welcome to meow IRC Client          |",
-        "+--------------------------------------------------+",
-        "| Available Commands:                              |",
-        "|                                                  |",
-        "|  /connect <server> <port> <nick>                 |",
-        "|  /join <#channel>                                |",
-        "|  /part <#channel>                                |",
-        "|  /msg <target> <message>                         |",
-        "|  /quit                                           |",
-        "+--------------------------------------------------+",
+        "⎹ Available Commands:                              ⎹",
+        "⎹                                                  ⎹",
+        "⎹  /connect <server> <port> <nick> <tls?           ⎹",
+        "⎹  /join <#channel>                                ⎹",
+        "⎹  /part <#channel>                                ⎹",
+        "⎹  /msg <target> <message>                         ⎹",
+        "⎹  /quit                                           ⎹",
+        "└─────────────────────────────────────────────────┘",
         "",
         "Press Enter to continue...",
     ];
@@ -241,15 +243,15 @@ pub async fn run_ui(
                                 }
                                 "/help" => {
                                     let help_lines = [
-                                        "+---------------------------------------------+",
+                                        "┌─────────────────────────────────────────────┐",
                                         "|                 Help Menu                   |",
                                         "+---------------------------------------------+",
-                                        "| /connect <server> [port] [nick]             |",
+                                        "| /connect <server> [port] [nick] [tls?]      |",
                                         "| /join <channel>                             |",
                                         "| /part <channel>                             |",
                                         "| /msg <target> <message>                     |",
                                         "| /quit                                       |",
-                                        "+---------------------------------------------+",
+                                        "└─────────────────────────────────────────────┘",
                                     ];
                                     messages.push_back(format_message(
                                         "You: /help",
