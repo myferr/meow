@@ -19,14 +19,14 @@ pub async fn run_irc(irc_tx: Sender<String>, mut input_rx: Receiver<InputCommand
             maybe_cmd = input_rx.recv() => {
                 match maybe_cmd {
                     Some(cmd) => match cmd {
-                        InputCommand::Connect { server, port, nick } => {
+                        InputCommand::Connect { server, port, nick, tls } => {
                             let config = Config {
                                 nickname: Some(nick.clone()),
                                 username: Some(nick.clone()),
-                                realname: Some("Rust IRC Client".into()),
+                                realname: Some("meow IRC Client".into()),
                                 server: Some(server.clone()),
                                 port: Some(port),
-                                use_tls: Some(true),
+                                use_tls: Some(tls),
                                 ..Default::default()
                             };
 
@@ -121,7 +121,13 @@ pub async fn run_irc(irc_tx: Sender<String>, mut input_rx: Receiver<InputCommand
                                         }
                                     });
 
-                                    irc_tx.send(format!("Connected to {}:{} as {}", server, port, nick)).await?;
+                                    irc_tx.send(format!(
+                                        "Connected to {}:{} as {} {} TLS",
+                                        server,
+                                        port,
+                                        nick,
+                                        if tls { "with" } else { "without" }
+                                    )).await?;
                                     client_opt = Some(client);
                                 }
 
