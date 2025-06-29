@@ -1,6 +1,6 @@
 # meow
 
-**meow** is a terminal-based IRC client written in Rust, with built-in support for TLS and SSL.
+**meow** is a terminal-based IRC (**I**nternet **R**elay **C**hat) client written in Rust, with built-in support for TLS and SSL.
 
 [Join the waitlist!](https://meow-irc.vercel.app)
 
