@@ -1,0 +1,40 @@
+name: Deploy ci/cd
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "waitlist/**"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy waitlist/ to Vercel
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: waitlist
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build with Bun
+        run: bun run build
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: waitlist
+          vercel-args: "--prod"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
