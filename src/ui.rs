@@ -147,19 +147,37 @@ pub async fn run_ui(
                                     let port =
                                         args.next().unwrap_or("6697").parse().unwrap_or(6697);
                                     let nick = args.next().unwrap_or("rusty").to_string();
+
+                                    // Parse TLS option (default true)
+                                    let tls = args
+                                        .next()
+                                        .map(|v| {
+                                            matches!(
+                                                v.to_lowercase().as_str(),
+                                                "true" | "yes" | "1"
+                                            )
+                                        })
+                                        .unwrap_or(true);
+
                                     let server_clone = server.clone();
                                     let nick_clone = nick.clone();
 
                                     if server.is_empty() {
                                         messages.push_back(format_message(
-                                            "You: Usage: /connect <server> [port] [nick]",
+                                            "You: Usage: /connect <server> [port] [nick] [tls]",
                                             max_width,
                                             left_padding,
                                         ));
                                     } else {
                                         input_tx
-                                            .send(InputCommand::Connect { server, port, nick })
+                                            .send(InputCommand::Connect {
+                                                server,
+                                                port,
+                                                nick,
+                                                tls,
+                                            })
                                             .await?;
+
                                         messages.push_back(format_message(
                                             &format!(
                                                 "You: /connect {} {} {}",
