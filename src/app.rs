@@ -4,6 +4,7 @@ pub enum InputCommand {
         server: String,
         port: u16,
         nick: String,
+        tls: bool,
     },
     SendMessage {
         target: String,
