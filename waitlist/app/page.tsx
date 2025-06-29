@@ -8,9 +8,9 @@ export default function Waitlist() {
   const [subscribed, setSubscribed] = useState(false);
 
   const featuresMap = [
-    { status: "inprogress", label: "Scrollback (PgUp/PgDn support)" },
+    { status: "complete", label: "Scrollback (PgUp/PgDn support)" },
     {
-      status: "not-in-progress",
+      status: "complete",
       label: "Input history (arrow key navigation)",
     },
     {
@@ -33,6 +33,12 @@ export default function Waitlist() {
     },
   ];
 
+  const statusColorMap: Record<string, string> = {
+    complete: "bg-green-600",
+    inprogress: "bg-blue-600 animate-pulse",
+    "not-in-progress": "bg-gray-700 opacity-50 rounded-full",
+  };
+
   useEffect(() => {
     const subscribed_localStorage = localStorage.getItem("subscribed");
     if (subscribed && subscribed_localStorage != "yes") {
@@ -52,7 +58,6 @@ export default function Waitlist() {
           <p className="text-sm text-gray-500">
             A modern terminal IRC client. Join the waitlist for early access.
           </p>
-
           {subscribed ? (
             <div className="p-4 border rounded bg-green-50 text-green-700">
               <p>Thanks for subscribing! We'll keep you posted</p>
@@ -92,6 +97,15 @@ export default function Waitlist() {
               </form>
             </div>
           )}
+          <div className="border-stone-300 border-t py-3">
+            <Link
+              href={"https://github.com/myferr/meow"}
+              target="_blank"
+              className="hover:before:content-['->'] hover:before:mr-1 text-blue-600 hover:underline hover:text-blue-700"
+            >
+              github
+            </Link>
+          </div>
         </div>
 
         {/* Right Section */}
@@ -104,7 +118,7 @@ export default function Waitlist() {
                 className="flex gap-1.5 items-center border-stone-200 pb-2 border-b text-sm"
               >
                 <div
-                  className={`w-2 h-2 bg-${i.status == "inprogress" ? "blue-600" : "gray-700"} ${i.status == "inprogress" ? "animate-pulse" : "opacity-50"} rounded-full`}
+                  className={`w-2 h-2 ${statusColorMap[i.status] || "bg-gray-400"}`}
                 />{" "}
                 {i.label}
               </li>
