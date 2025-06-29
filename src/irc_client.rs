@@ -149,7 +149,7 @@ pub async fn run_irc(irc_tx: Sender<String>, mut input_rx: Receiver<InputCommand
                                 let message_clone = message.clone();
 
                                 tokio::spawn(async move {
-                                    let mut locked = client.lock().await;
+                                    let locked = client.lock().await;
                                     if let Err(e) = locked.send_privmsg(&target_clone, &message_clone) {
                                         let _ = tx_clone.send(format!("Error sending to {}: {}", target_clone, e)).await;
                                     } else {
@@ -168,7 +168,7 @@ pub async fn run_irc(irc_tx: Sender<String>, mut input_rx: Receiver<InputCommand
                                 let channel_clone = channel.clone();
 
                                 tokio::spawn(async move {
-                                    let mut locked = client.lock().await;
+                                    let locked = client.lock().await;
                                     if let Err(e) = locked.send_join(&channel_clone) {
                                         let _ = tx_clone.send(format!("Error joining {}: {}", channel_clone, e)).await;
                                     } else {
@@ -189,7 +189,7 @@ pub async fn run_irc(irc_tx: Sender<String>, mut input_rx: Receiver<InputCommand
                                 let channel_clone = channel.clone();
 
                                 tokio::spawn(async move {
-                                    let mut locked = client.lock().await;
+                                    let locked = client.lock().await;
                                     if let Err(e) = locked.send_part(&channel_clone) {
                                         let _ = tx_clone.send(format!("Error parting {}: {}", channel_clone, e)).await;
                                     } else {
@@ -207,7 +207,7 @@ pub async fn run_irc(irc_tx: Sender<String>, mut input_rx: Receiver<InputCommand
 
                         InputCommand::Quit => {
                             if let Some(client) = &client_opt {
-                                let mut locked = client.lock().await;
+                                let locked = client.lock().await;
                                 let _ = locked.send_quit("Bye!");
                             }
                             break;
@@ -222,7 +222,7 @@ pub async fn run_irc(irc_tx: Sender<String>, mut input_rx: Receiver<InputCommand
                                     let message_clone = message.clone();
 
                                     tokio::spawn(async move {
-                                        let mut locked = client.lock().await;
+                                        let locked = client.lock().await;
                                         if let Err(e) = locked.send_privmsg(&channel_clone, &message_clone) {
                                             let _ = tx_clone.send(format!("Error sending: {}", e)).await;
                                         } else {
