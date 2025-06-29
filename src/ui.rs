@@ -42,7 +42,7 @@ pub async fn run_ui(
     execute!(stdout, Clear(ClearType::All))?;
     let lines = [
         "+--------------------------------------------------+",
-        "|              Welcome to Rust IRC Client          |",
+        "|              Welcome to meow IRC Client          |",
         "+--------------------------------------------------+",
         "| Available Commands:                              |",
         "|                                                  |",
@@ -95,7 +95,7 @@ pub async fn run_ui(
         execute!(stdout, SetForegroundColor(Color::Blue))?;
         writeln!(
             stdout,
-            "{}Rust IRC Client | Type /help for commands. ESC to quit.",
+            "{}meow IRC Client | Type /help for commands. ESC to quit.",
             " ".repeat(left_padding)
         )?;
         execute!(stdout, ResetColor)?;
