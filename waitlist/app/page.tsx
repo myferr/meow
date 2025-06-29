@@ -8,7 +8,7 @@ export default function Waitlist() {
   const [subscribed, setSubscribed] = useState(false);
 
   const featuresMap = [
-    { status: "not-in-progress", label: "Scrollback (PgUp/PgDn support)" },
+    { status: "inprogress", label: "Scrollback (PgUp/PgDn support)" },
     {
       status: "not-in-progress",
       label: "Input history (arrow key navigation)",
