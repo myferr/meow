@@ -24,8 +24,8 @@ This project is currently in active development. Please do not use it in product
 - [x] Scrollback (PgUp/PgDn support)
 - [x] Input history (arrow key navigation)
 - [x] Word wrap & terminal overflow handling
-- [ ] Auto-reconnect on disconnect
-- [ ] Graceful error handling (no panics or unwraps)
+- [x] Auto-reconnect on disconnect
+- [x] Graceful error handling (no panics or unwraps)
 - [ ] Config file support (`~/.meow/config.toml`)
 - [ ] Windows and cross-platform builds
 - [ ] Clean shutdown (e.g. Ctrl+C support)

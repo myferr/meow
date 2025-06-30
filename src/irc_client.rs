@@ -57,7 +57,7 @@ async fn connect_and_listen(
                                 .prefix
                                 .as_ref()
                                 .map(|p| p.to_string())
-                                .unwrap_or_default();
+                                .unwrap_or_else(|| "unknown".to_string());
                             let _ = tx_clone_for_spawn
                                 .send(format!("*** {} joined {}", prefix, channel))
                                 .await;
@@ -100,7 +100,7 @@ async fn connect_and_listen(
                             let reason_str = reason
                                 .as_ref()
                                 .map(|r| r.to_string())
-                                .unwrap_or("Quit".into());
+                                .unwrap_or_else(|| "Quit".to_string());
                             if let Some(sender) = message.source_nickname() {
                                 let _ = tx_clone_for_spawn
                                     .send(format!("*** {} quit: {}", sender, reason_str))
@@ -114,7 +114,7 @@ async fn connect_and_listen(
                         }
                         Command::Response(_code, params) => {
                             // Handle numeric IRC responses (e.g., welcome messages, MOTD).
-                            let code = params.get(0).cloned().unwrap_or_default();
+                            let code = params.get(0).cloned().unwrap_or_else(|| "000".to_string());
                             let msg = params.iter().skip(1).cloned().collect::<Vec<_>>().join(" ");
                             let display = match code.as_str() {
                                 "001" => format!("*** Welcome: {}", msg),
@@ -331,17 +331,21 @@ pub async fn run_irc(
 
                                                 // If a channel was previously joined, attempt to re-join it.
                                                 if let Some(channel) = &current_channel {
-                                                    let client_rejoin = Arc::clone(client_opt.as_ref().unwrap());
-                                                    let tx_rejoin = irc_tx.clone();
-                                                    let channel_rejoin = channel.clone();
-                                                    tokio::spawn(async move {
-                                                        let locked = client_rejoin.lock().await;
-                                                        if let Err(e) = locked.send_join(&channel_rejoin) {
-                                                            let _ = tx_rejoin.send(format!("Error rejoining {}: {}", channel_rejoin, e)).await;
-                                                        } else {
-                                                            let _ = tx_rejoin.send(format!("*** Rejoined {}", channel_rejoin)).await;
-                                                        }
-                                                    });
+                                                    if let Some(client_ref) = client_opt.as_ref() {
+                                                        let client_rejoin = Arc::clone(client_ref);
+                                                        let tx_rejoin = irc_tx.clone();
+                                                        let channel_rejoin = channel.clone();
+                                                        tokio::spawn(async move {
+                                                            let locked = client_rejoin.lock().await;
+                                                            if let Err(e) = locked.send_join(&channel_rejoin) {
+                                                                let _ = tx_rejoin.send(format!("Error rejoining {}: {}", channel_rejoin, e)).await;
+                                                            } else {
+                                                                let _ = tx_rejoin.send(format!("*** Rejoined {}", channel_rejoin)).await;
+                                                            }
+                                                        });
+                                                    } else {
+                                                        let _ = irc_tx.send("Warning: Could not rejoin channel - client not available".to_string()).await;
+                                                    }
                                                 }
                                                 break; // Break out of the reconnection loop
                                             }
