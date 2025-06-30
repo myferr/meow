@@ -17,7 +17,7 @@ export default function Waitlist() {
       status: "complete",
       label: "Word wrap & terminal overflow handling",
     },
-    { status: "not-in-progress", label: "Auto-reconnect on disconnect" },
+    { status: "inprogress", label: "Auto-reconnect on disconnect" },
     {
       status: "not-in-progress",
       label: "Graceful error handling (no panics or unwraps)",
