@@ -26,12 +26,15 @@ export default function Waitlist() {
       status: "complete",
       label: "Config file support (`~/.meow/config.toml`)",
     },
-    { status: "inprogress", label: "Adding configurable themes in ~/.meow/config.toml" },
-    { status: "not-in-progress", label: "Windows and cross-platform builds" },
+    {
+      status: "inprogress",
+      label: "Adding configurable themes in ~/.meow/config.toml",
+    },
     {
       status: "not-in-progress",
       label: "Clean shutdown (e.g. Ctrl+C support)",
-    }
+    },
+    { status: "not-in-progress", label: "Windows and cross-platform builds" },
   ];
 
   const statusColorMap: Record<string, string> = {
