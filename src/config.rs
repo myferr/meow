@@ -41,4 +41,3 @@ impl UserConfig {
             .join("config.toml")
     }
 }
-
