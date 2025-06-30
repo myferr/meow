@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+dirs = "5"
 tokio = { version = "1.28", features = ["full"] }
 irc = "0.15"
 anyhow = "1.0"

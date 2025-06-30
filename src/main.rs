@@ -1,4 +1,5 @@
 mod app;
+mod config;
 mod irc_client;
 mod ui;
 

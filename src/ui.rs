@@ -1,9 +1,10 @@
 use crate::app::InputCommand;
+use crate::config::UserConfig;
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode},
     execute,
-    style::{Attribute, Color, ResetColor, SetAttribute, SetForegroundColor},
+    style::{Attribute, Color, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor},
     terminal::{
         disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
         LeaveAlternateScreen,
@@ -15,13 +16,49 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::Duration;
 use unicode_segmentation::UnicodeSegmentation;
 
+fn parse_color(hex: &str) -> Option<Color> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() == 6 {
+        if let Ok(rgb) = u32::from_str_radix(hex, 16) {
+            let r = ((rgb >> 16) & 0xFF) as u8;
+            let g = ((rgb >> 8) & 0xFF) as u8;
+            let b = (rgb & 0xFF) as u8;
+            return Some(Color::Rgb { r, g, b });
+        }
+    }
+    None
+}
+
 pub async fn run_ui(
     input_tx: Sender<InputCommand>,
     mut irc_rx: Receiver<String>,
 ) -> anyhow::Result<()> {
+    let config = UserConfig::load();
+    let icons_enabled = config
+        .as_ref()
+        .and_then(|cfg| cfg.conf.as_ref())
+        .map(|conf| conf.icons)
+        .unwrap_or(false);
+
+    let theme = config.as_ref().and_then(|cfg| cfg.theme.as_ref());
+    let fg_color = theme
+        .and_then(|t| t.foreground.as_deref())
+        .and_then(parse_color);
+    let bg_color = theme
+        .and_then(|t| t.background.as_deref())
+        .and_then(parse_color);
+    let accent_color = theme
+        .and_then(|t| t.accent.as_deref())
+        .and_then(parse_color);
+    let muted_color = theme.and_then(|t| t.muted.as_deref()).and_then(parse_color);
+
     enable_raw_mode()?;
     let mut stdout = stdout();
     execute!(stdout, EnterAlternateScreen, cursor::Hide)?;
+
+    if let Some(bg) = bg_color {
+        execute!(stdout, SetBackgroundColor(bg))?;
+    }
 
     let mut input = String::new();
     let mut messages: VecDeque<Vec<String>> = VecDeque::with_capacity(100);
@@ -66,9 +103,13 @@ pub async fn run_ui(
     }
 
     execute!(stdout, Clear(ClearType::All))?;
+    let icon = if icons_enabled { "🐾 " } else { "" };
     let lines = [
         "╭────────────────────────────────────────────────────────────╮",
-        "│              \x1b[1mWelcome to meow IRC Client\x1b[0m              │",
+        &format!(
+            "│              \x1b[1m{}Welcome to meow IRC Client\x1b[0m              │",
+            icon
+        ),
         "├────────────────────────────────────────────────────────────┤",
         "│  \x1b[3mAvailable Commands:\x1b[0m                                  │",
         "│                                                            │",
@@ -82,7 +123,12 @@ pub async fn run_ui(
         "Press \x1b[1mEnter\x1b[0m to continue...",
     ];
 
-    execute!(stdout, SetForegroundColor(Color::Cyan))?;
+    if let Some(color) = accent_color {
+        execute!(stdout, SetForegroundColor(color))?;
+    } else {
+        execute!(stdout, SetForegroundColor(Color::Cyan))?;
+    }
+
     let mut y = 2;
     for line in lines.iter() {
         for wrapped_line in format_message(line, max_width, 0) {
@@ -117,11 +163,15 @@ pub async fn run_ui(
         }
 
         execute!(stdout, cursor::MoveTo(0, 0), Clear(ClearType::All))?;
-        execute!(
-            stdout,
-            SetForegroundColor(Color::Blue),
-            SetAttribute(Attribute::Bold)
-        )?;
+        if let Some(color) = fg_color {
+            execute!(stdout, SetForegroundColor(color))?;
+        } else {
+            execute!(
+                stdout,
+                SetForegroundColor(Color::Blue),
+                SetAttribute(Attribute::Bold)
+            )?;
+        }
         writeln!(
             stdout,
             "{}╭─ meow IRC Client ── Type /help for commands. ESC to quit ─╮",
@@ -144,11 +194,15 @@ pub async fn run_ui(
 
         execute!(stdout, cursor::MoveTo(0, (max_height + 2) as u16))?;
         writeln!(stdout)?;
-        execute!(
-            stdout,
-            SetForegroundColor(Color::Green),
-            SetAttribute(Attribute::Bold)
-        )?;
+        if let Some(color) = muted_color {
+            execute!(stdout, SetForegroundColor(color))?;
+        } else {
+            execute!(
+                stdout,
+                SetForegroundColor(Color::Green),
+                SetAttribute(Attribute::Bold)
+            )?;
+        }
         for line in format_message(&format!("❯ {}", input), max_width, left_padding) {
             writeln!(stdout, "{}", line)?;
         }
@@ -185,10 +239,23 @@ pub async fn run_ui(
                                 "/connect" => {
                                     let mut args = arg.split_whitespace();
                                     let server = args.next().unwrap_or("").to_string();
-                                    let port =
-                                        args.next().unwrap_or("6697").parse().unwrap_or(6697);
-                                    let nick = args.next().unwrap_or("meow").to_string();
-                                    let tls = args.next().map_or(true, |v| v == "true" || v == "1");
+
+                                    let config = config.clone();
+                                    let port = config
+                                        .as_ref()
+                                        .and_then(|c| c.irc.as_ref()?.port)
+                                        .unwrap_or(6697);
+
+                                    let nick = config
+                                        .as_ref()
+                                        .and_then(|c| c.irc.as_ref()?.nick.clone())
+                                        .unwrap_or_else(|| "meow".to_string());
+
+                                    let tls = config
+                                        .as_ref()
+                                        .and_then(|c| c.irc.as_ref()?.tls)
+                                        .unwrap_or(true);
+
                                     input_tx
                                         .send(InputCommand::Connect {
                                             server,
