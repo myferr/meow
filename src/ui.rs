@@ -103,7 +103,7 @@ pub async fn run_ui(
     }
 
     execute!(stdout, Clear(ClearType::All))?;
-    let icon = if icons_enabled { "🐾 " } else { "" };
+    let icon = if icons_enabled { "󰄛 " } else { "" };
     let lines = [
         "╭────────────────────────────────────────────────────────────╮",
         &format!(
@@ -113,7 +113,7 @@ pub async fn run_ui(
         "├────────────────────────────────────────────────────────────┤",
         "│  \x1b[3mAvailable Commands:\x1b[0m                                  │",
         "│                                                            │",
-        "│  \x1b[1m/connect <server> <port> <nick>\x1b[0m                 │",
+        "│  \x1b[1m/connect <server> <port> <nick> <tls>\x1b[0m                 │",
         "│  \x1b[1m/join <#channel>\x1b[0m                                │",
         "│  \x1b[1m/part <#channel>\x1b[0m                                │",
         "│  \x1b[1m/msg <target> <message>\x1b[0m                         │",
