@@ -32,6 +32,6 @@ Contributions to [meow](https://github.com/myferr/meow) are welcome and encourag
 - [x] Auto-reconnect on disconnect
 - [x] Graceful error handling (no panics or unwraps)
 - [x] Config file support (`~/.meow/config.toml`)
-- [ ] Adding configurable themes in ~/.meow/config.toml
+- [x] Adding configurable themes in `~/.meow/config.toml`
 - [ ] Clean shutdown (e.g. Ctrl+C support)
 - [ ] Windows and cross-platform builds

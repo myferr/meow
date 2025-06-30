@@ -27,7 +27,7 @@ export default function Waitlist() {
       label: "Config file support (`~/.meow/config.toml`)",
     },
     {
-      status: "inprogress",
+      status: "complete",
       label: "Adding configurable themes in ~/.meow/config.toml",
     },
     {
