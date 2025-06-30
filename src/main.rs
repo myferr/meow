@@ -25,9 +25,12 @@ async fn main() -> Result<()> {
     let (ui_tx, input_rx) = mpsc::channel::<InputCommand>(100);
 
     // Spawn IRC logic
-    let irc_handle = tokio::spawn(async move {
-        if let Err(e) = irc_client::run_irc(irc_tx, input_rx).await {
-            eprintln!("IRC client error: {:?}", e);
+    let irc_handle = tokio::spawn({
+        let ui_tx = ui_tx.clone();
+        async move {
+            if let Err(e) = irc_client::run_irc(irc_tx, ui_tx, input_rx).await {
+                eprintln!("IRC client error: {:?}", e);
+            }
         }
     });
 

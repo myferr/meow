@@ -14,4 +14,5 @@ pub enum InputCommand {
     PartChannel(String),
     Quit,
     SendPlainMessage(String),
+    Disconnected,
 }
