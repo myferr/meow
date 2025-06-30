@@ -29,28 +29,19 @@ async fn connect_and_listen(
     let tx_clone_for_spawn = irc_tx.clone();
     let input_tx_clone_for_spawn = input_tx.clone(); // Clone input_tx for the spawned task
 
+    // --- FIX START ---
+    // Acquire a lock on the client to get its message stream *here*,
+    // before spawning the task. If this fails, connect_and_listen should return an error.
+    let stream = {
+        let mut locked_client = client_clone_for_spawn.lock().await;
+        locked_client.stream()? // Propagate the error if stream() fails
+    };
+    // --- FIX END ---
+
     // Spawn a new asynchronous task to continuously read messages from the IRC stream.
     tokio::spawn(async move {
-        // Acquire a lock on the client to get its message stream.
-        let stream = {
-            let mut locked_client = client_clone_for_spawn.lock().await;
-            match locked_client.stream() {
-                Ok(s) => s,
-                Err(e) => {
-                    // If stream initialization fails, send an error message and signal disconnect.
-                    let _ = tx_clone_for_spawn
-                        .send(format!("Error initializing IRC stream: {}", e))
-                        .await;
-                    let _ = input_tx_clone_for_spawn
-                        .send(InputCommand::Disconnected)
-                        .await;
-                    return; // Exit the spawned task
-                }
-            }
-        };
-
-        let mut stream = stream;
-        // Loop to process each message received from the IRC server.
+        let mut stream = stream; // Use the stream obtained above
+                                 // Loop to process each message received from the IRC server.
         while let Some(message_result) = stream.next().await {
             match message_result {
                 Ok(message) => {
@@ -164,7 +155,7 @@ async fn connect_and_listen(
             .await; // Signal disconnect
     });
 
-    Ok(client_arc)
+    Ok(client_arc) // Return the client only if stream acquisition and task spawning were successful
 }
 
 /// Runs the IRC client logic, handling connect, join, messaging, and receiving.
