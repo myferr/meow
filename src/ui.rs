@@ -36,8 +36,7 @@ pub async fn run_ui(
     let config = UserConfig::load();
     let icons_enabled = config
         .as_ref()
-        .and_then(|cfg| cfg.conf.as_ref())
-        .map(|conf| conf.icons)
+        .and_then(|cfg| cfg.theme.as_ref()?.icons)
         .unwrap_or(false);
 
     let theme = config.as_ref().and_then(|cfg| cfg.theme.as_ref());
@@ -137,7 +136,7 @@ pub async fn run_ui(
             y += 1;
         }
     }
-    execute!(stdout, ResetColor)?;
+    execute!(stdout, SetForegroundColor(Color::Reset))?;
     stdout.flush()?;
 
     loop {
@@ -150,6 +149,9 @@ pub async fn run_ui(
         }
     }
 
+    if let Some(bg) = bg_color {
+        execute!(stdout, SetBackgroundColor(bg))?;
+    }
     execute!(stdout, cursor::MoveTo(0, 0), Clear(ClearType::All))?;
     stdout.flush()?;
 
@@ -162,6 +164,9 @@ pub async fn run_ui(
             messages.push_back(format_message(&msg, max_width, left_padding));
         }
 
+        if let Some(bg) = bg_color {
+            execute!(stdout, SetBackgroundColor(bg))?;
+        }
         execute!(stdout, cursor::MoveTo(0, 0), Clear(ClearType::All))?;
         if let Some(color) = fg_color {
             execute!(stdout, SetForegroundColor(color))?;
@@ -177,7 +182,7 @@ pub async fn run_ui(
             "{}╭─ meow IRC Client ── Type /help for commands. ESC to quit ─╮",
             " ".repeat(left_padding)
         )?;
-        execute!(stdout, ResetColor)?;
+        execute!(stdout, SetForegroundColor(Color::Reset))?;
 
         let flat_messages: Vec<String> = messages.iter().flat_map(|v| v.clone()).collect();
         let start = if flat_messages.len() > max_height + scroll_offset {
@@ -206,7 +211,7 @@ pub async fn run_ui(
         for line in format_message(&format!("❯ {}", input), max_width, left_padding) {
             writeln!(stdout, "{}", line)?;
         }
-        execute!(stdout, ResetColor)?;
+        execute!(stdout, SetForegroundColor(Color::Reset))?;
         stdout.flush()?;
 
         if event::poll(Duration::from_millis(100))? {
@@ -378,7 +383,12 @@ pub async fn run_ui(
         }
     }
 
-    execute!(stdout, LeaveAlternateScreen, cursor::Show)?;
+    execute!(
+        stdout,
+        ResetColor,
+        SetBackgroundColor(Color::Reset),
+        SetForegroundColor(Color::Reset)
+    )?;
     disable_raw_mode()?;
     Ok(())
 }

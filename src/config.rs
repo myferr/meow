@@ -5,7 +5,6 @@ use std::path::PathBuf;
 #[derive(Debug, Deserialize, Clone)]
 pub struct UserConfig {
     pub irc: Option<IrcConfig>,
-    pub conf: Option<UiConfig>,
     pub theme: Option<ThemeConfig>,
 }
 
@@ -15,6 +14,7 @@ pub struct ThemeConfig {
     pub foreground: Option<String>,
     pub accent: Option<String>,
     pub muted: Option<String>,
+    pub icons: Option<bool>, // ← moved here
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -22,11 +22,6 @@ pub struct IrcConfig {
     pub nick: Option<String>,
     pub port: Option<u16>,
     pub tls: Option<bool>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct UiConfig {
-    pub icons: bool,
 }
 
 impl UserConfig {
@@ -46,3 +41,4 @@ impl UserConfig {
             .join("config.toml")
     }
 }
+
