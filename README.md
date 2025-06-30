@@ -26,7 +26,8 @@ This project is currently in active development. Please do not use it in product
 - [x] Word wrap & terminal overflow handling
 - [x] Auto-reconnect on disconnect
 - [x] Graceful error handling (no panics or unwraps)
-- [ ] Config file support (`~/.meow/config.toml`)
+- [x] Config file support (`~/.meow/config.toml`)
+- [ ] Adding configurable themes in ~/.meow/config.toml
 - [ ] Windows and cross-platform builds
 - [ ] Clean shutdown (e.g. Ctrl+C support)
 - [ ] ...and more!
