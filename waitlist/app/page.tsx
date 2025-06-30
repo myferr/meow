@@ -23,7 +23,7 @@ export default function Waitlist() {
       label: "Graceful error handling (no panics or unwraps)",
     },
     {
-      status: "not-in-progress",
+      status: "inprogress",
       label: "Config file support (`~/.meow/config.toml`)",
     },
     { status: "not-in-progress", label: "Windows and cross-platform builds" },
