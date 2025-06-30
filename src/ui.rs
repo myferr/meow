@@ -24,19 +24,45 @@ pub async fn run_ui(
     execute!(stdout, EnterAlternateScreen, cursor::Hide)?;
 
     let mut input = String::new();
-    let mut messages: VecDeque<String> = VecDeque::with_capacity(100);
+    let mut messages: VecDeque<Vec<String>> = VecDeque::with_capacity(100);
     let mut scroll_offset: usize = 0;
     let mut input_history: Vec<String> = Vec::new();
     let mut input_history_index: Option<usize> = None;
 
     let max_width = 80;
     let left_padding = 2;
+    let max_height = 20;
 
-    fn format_message(msg: &str, max_width: usize, left_padding: usize) -> String {
+    fn format_message(msg: &str, max_width: usize, left_padding: usize) -> Vec<String> {
         let available_width = max_width.saturating_sub(left_padding);
-        let graphemes: Vec<&str> = UnicodeSegmentation::graphemes(msg, true).collect();
-        let truncated: String = graphemes.into_iter().take(available_width).collect();
-        format!("{:width$}{}", "", truncated, width = left_padding)
+        let mut lines = Vec::new();
+        let mut current_line = String::new();
+        let mut current_len = 0;
+
+        for grapheme in UnicodeSegmentation::graphemes(msg, true) {
+            let width = grapheme.chars().count();
+            if current_len + width > available_width {
+                lines.push(format!(
+                    "{:width$}{}",
+                    "",
+                    current_line,
+                    width = left_padding
+                ));
+                current_line.clear();
+                current_len = 0;
+            }
+            current_line.push_str(grapheme);
+            current_len += width;
+        }
+        if !current_line.is_empty() {
+            lines.push(format!(
+                "{:width$}{}",
+                "",
+                current_line,
+                width = left_padding
+            ));
+        }
+        lines
     }
 
     execute!(stdout, Clear(ClearType::All))?;
@@ -57,9 +83,13 @@ pub async fn run_ui(
     ];
 
     execute!(stdout, SetForegroundColor(Color::Cyan))?;
-    for (i, line) in lines.iter().enumerate() {
-        execute!(stdout, cursor::MoveTo(left_padding as u16, i as u16 + 2))?;
-        writeln!(stdout, "{}", format_message(line, max_width, 0))?;
+    let mut y = 2;
+    for line in lines.iter() {
+        for wrapped_line in format_message(line, max_width, 0) {
+            execute!(stdout, cursor::MoveTo(left_padding as u16, y))?;
+            writeln!(stdout, "{}", wrapped_line)?;
+            y += 1;
+        }
     }
     execute!(stdout, ResetColor)?;
     stdout.flush()?;
@@ -78,7 +108,6 @@ pub async fn run_ui(
     stdout.flush()?;
 
     let mut running = true;
-
     while running {
         while let Ok(msg) = irc_rx.try_recv() {
             if messages.len() == 100 {
@@ -100,32 +129,29 @@ pub async fn run_ui(
         )?;
         execute!(stdout, ResetColor)?;
 
-        let height = 20;
-        let start = if messages.len() > height + scroll_offset {
-            messages.len() - height - scroll_offset
+        let flat_messages: Vec<String> = messages.iter().flat_map(|v| v.clone()).collect();
+        let start = if flat_messages.len() > max_height + scroll_offset {
+            flat_messages.len() - max_height - scroll_offset
         } else {
             0
         };
-        let end = messages.len().saturating_sub(scroll_offset);
+        let end = flat_messages.len().saturating_sub(scroll_offset);
 
-        for (i, msg) in messages.iter().take(end).skip(start).enumerate() {
+        for (i, msg) in flat_messages.iter().take(end).skip(start).enumerate() {
             execute!(stdout, cursor::MoveTo(0, (i + 2) as u16))?;
             writeln!(stdout, "{}", msg)?;
         }
 
-        execute!(stdout, cursor::MoveTo(0, (height + 2) as u16))?;
+        execute!(stdout, cursor::MoveTo(0, (max_height + 2) as u16))?;
         writeln!(stdout)?;
         execute!(
             stdout,
             SetForegroundColor(Color::Green),
             SetAttribute(Attribute::Bold)
         )?;
-        write!(
-            stdout,
-            "{}❯ {}",
-            " ".repeat(left_padding),
-            format_message(&input, max_width - 2, 0)
-        )?;
+        for line in format_message(&format!("❯ {}", input), max_width, left_padding) {
+            writeln!(stdout, "{}", line)?;
+        }
         execute!(stdout, ResetColor)?;
         stdout.flush()?;
 
@@ -147,8 +173,11 @@ pub async fn run_ui(
                         input_history_index = None;
                         scroll_offset = 0;
 
+                        let user_msg = format!("You: {}", input);
+                        messages.push_back(format_message(&user_msg, max_width, left_padding));
+
                         if input.starts_with('/') {
-                            let mut parts = input.splitn(2, ' ');
+                            let mut parts = input.trim().splitn(2, ' ');
                             let cmd = parts.next().unwrap_or("");
                             let arg = parts.next().unwrap_or("");
 
@@ -158,68 +187,26 @@ pub async fn run_ui(
                                     let server = args.next().unwrap_or("").to_string();
                                     let port =
                                         args.next().unwrap_or("6697").parse().unwrap_or(6697);
-                                    let nick = args.next().unwrap_or("rusty").to_string();
-                                    let tls = args
-                                        .next()
-                                        .map(|v| {
-                                            matches!(
-                                                v.to_lowercase().as_str(),
-                                                "true" | "yes" | "1"
-                                            )
+                                    let nick = args.next().unwrap_or("meow").to_string();
+                                    let tls = args.next().map_or(true, |v| v == "true" || v == "1");
+                                    input_tx
+                                        .send(InputCommand::Connect {
+                                            server,
+                                            port,
+                                            nick,
+                                            tls,
                                         })
-                                        .unwrap_or(true);
-
-                                    let server_clone = server.clone();
-                                    let nick_clone = nick.clone();
-
-                                    if server.is_empty() {
-                                        messages.push_back(format_message(
-                                            "You: Usage: /connect <server> [port] [nick] [tls]",
-                                            max_width,
-                                            left_padding,
-                                        ));
-                                    } else {
-                                        input_tx
-                                            .send(InputCommand::Connect {
-                                                server,
-                                                port,
-                                                nick,
-                                                tls,
-                                            })
-                                            .await?;
-                                        messages.push_back(format_message(
-                                            &format!(
-                                                "You: /connect {} {} {}",
-                                                server_clone, port, nick_clone
-                                            ),
-                                            max_width,
-                                            left_padding,
-                                        ));
-                                    }
+                                        .await?;
                                 }
                                 "/join" => {
-                                    if !arg.is_empty() {
-                                        input_tx
-                                            .send(InputCommand::JoinChannel(arg.to_string()))
-                                            .await?;
-                                        messages.push_back(format_message(
-                                            &format!("You: /join {}", arg),
-                                            max_width,
-                                            left_padding,
-                                        ));
-                                    }
+                                    input_tx
+                                        .send(InputCommand::JoinChannel(arg.to_string()))
+                                        .await?;
                                 }
                                 "/part" => {
-                                    if !arg.is_empty() {
-                                        input_tx
-                                            .send(InputCommand::PartChannel(arg.to_string()))
-                                            .await?;
-                                        messages.push_back(format_message(
-                                            &format!("You: /part {}", arg),
-                                            max_width,
-                                            left_padding,
-                                        ));
-                                    }
+                                    input_tx
+                                        .send(InputCommand::PartChannel(arg.to_string()))
+                                        .await?;
                                 }
                                 "/msg" => {
                                     let mut msg_parts = arg.splitn(2, ' ');
@@ -232,20 +219,10 @@ pub async fn run_ui(
                                                 message: message.to_string(),
                                             })
                                             .await?;
-                                        messages.push_back(format_message(
-                                            &format!("You: /msg {} {}", target, message),
-                                            max_width,
-                                            left_padding,
-                                        ));
                                     }
                                 }
                                 "/quit" => {
                                     input_tx.send(InputCommand::Quit).await?;
-                                    messages.push_back(format_message(
-                                        "You: /quit",
-                                        max_width,
-                                        left_padding,
-                                    ));
                                     running = false;
                                 }
                                 "/help" => {
@@ -253,52 +230,42 @@ pub async fn run_ui(
                                         "╭───────────────────────────────────────────────╮",
                                         "│                   Help Menu                  │",
                                         "├───────────────────────────────────────────────┤",
-                                        "│ /connect <server> [port] [nick]              │",
+                                        "│ /connect <server> [port] [nick] [tls]        │",
                                         "│ /join <channel>                              │",
                                         "│ /part <channel>                              │",
                                         "│ /msg <target> <message>                      │",
                                         "│ /quit                                        │",
                                         "╰───────────────────────────────────────────────╯",
                                     ];
-                                    messages.push_back(format_message(
-                                        "You: /help",
-                                        max_width,
-                                        left_padding,
-                                    ));
                                     for line in help_lines {
                                         messages.push_back(format_message(
-                                            &line.to_string(),
+                                            line,
                                             max_width,
                                             left_padding,
                                         ));
                                     }
                                 }
                                 _ => {
+                                    let unknown = format!("Unknown command: {}", cmd);
                                     messages.push_back(format_message(
-                                        &format!("You: Unknown command: {}", cmd),
+                                        &unknown,
                                         max_width,
                                         left_padding,
                                     ));
                                 }
                             }
-                        } else if !input.is_empty() {
-                            messages.push_back(format_message(
-                                &format!("You: {}", input),
-                                max_width,
-                                left_padding,
-                            ));
                         }
+
                         input.clear();
                     }
                     KeyCode::Esc => {
                         input_tx.send(InputCommand::Quit).await?;
-                        messages.push_back(format_message("You: /quit", max_width, left_padding));
                         running = false;
                     }
                     KeyCode::PageUp => {
                         scroll_offset += 5;
-                        if scroll_offset > messages.len().saturating_sub(1) {
-                            scroll_offset = messages.len().saturating_sub(1);
+                        if scroll_offset > flat_messages.len().saturating_sub(1) {
+                            scroll_offset = flat_messages.len().saturating_sub(1);
                         }
                     }
                     KeyCode::PageDown => {
@@ -346,6 +313,5 @@ pub async fn run_ui(
 
     execute!(stdout, LeaveAlternateScreen, cursor::Show)?;
     disable_raw_mode()?;
-
     Ok(())
 }
