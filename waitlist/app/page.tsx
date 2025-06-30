@@ -23,14 +23,15 @@ export default function Waitlist() {
       label: "Graceful error handling (no panics or unwraps)",
     },
     {
-      status: "inprogress",
+      status: "complete",
       label: "Config file support (`~/.meow/config.toml`)",
     },
+    { status: "inprogress", label: "Adding configurable themes in ~/.meow/config.toml" },
     { status: "not-in-progress", label: "Windows and cross-platform builds" },
     {
       status: "not-in-progress",
       label: "Clean shutdown (e.g. Ctrl+C support)",
-    },
+    }
   ];
 
   const statusColorMap: Record<string, string> = {
