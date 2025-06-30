@@ -23,7 +23,7 @@ This project is currently in active development. Please do not use it in product
 - [x] Display help prompt
 - [x] Scrollback (PgUp/PgDn support)
 - [x] Input history (arrow key navigation)
-- [ ] Word wrap & terminal overflow handling
+- [x] Word wrap & terminal overflow handling
 - [ ] Auto-reconnect on disconnect
 - [ ] Graceful error handling (no panics or unwraps)
 - [ ] Config file support (`~/.meow/config.toml`)
