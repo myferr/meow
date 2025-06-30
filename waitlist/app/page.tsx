@@ -14,7 +14,7 @@ export default function Waitlist() {
       label: "Input history (arrow key navigation)",
     },
     {
-      status: "inprogress",
+      status: "complete",
       label: "Word wrap & terminal overflow handling",
     },
     { status: "not-in-progress", label: "Auto-reconnect on disconnect" },
