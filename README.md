@@ -12,6 +12,11 @@ This project is currently in active development. Please do not use it in product
 
 ---
 
+## Contributing
+Contributions to [meow](https://github.com/myferr/meow) are welcome and encouraged! Before you contribute please read [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
 ## To-do
 
 - [x] TLS support
