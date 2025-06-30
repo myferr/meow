@@ -5,10 +5,7 @@ use crossterm::{
     event::{self, Event, KeyCode},
     execute,
     style::{Attribute, Color, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor},
-    terminal::{
-        disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
-        LeaveAlternateScreen,
-    },
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen},
 };
 use std::collections::VecDeque;
 use std::io::{stdout, Write};
