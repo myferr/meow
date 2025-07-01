@@ -98,6 +98,19 @@ pub async fn run_ui(
         lines
     }
 
+    fn prefix_message(input: &str) -> String {
+        if input == ":)" {
+            return "::)".to_string();
+        }
+
+        let words: Vec<&str> = input.split_whitespace().collect();
+        if words.len() == 1 && input.starts_with(':') {
+            format!(":{}", input)
+        } else {
+            input.to_string()
+        }
+    }
+
     execute!(stdout, Clear(ClearType::All))?;
     let icon = if icons_enabled { "󰄛 " } else { "" };
     let lines = [
@@ -229,9 +242,6 @@ pub async fn run_ui(
                         input_history_index = None;
                         scroll_offset = 0;
 
-                        let user_msg = format!("You: {}", input);
-                        messages.push_back(format_message(&user_msg, max_width, left_padding));
-
                         if input.starts_with('/') {
                             let mut parts = input.trim().splitn(2, ' ');
                             let cmd = parts.next().unwrap_or("");
@@ -266,33 +276,47 @@ pub async fn run_ui(
                                             tls,
                                         })
                                         .await?;
+                                    let user_msg = format!("You: {}", input); // Display command as is
+                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
                                 }
                                 "/join" => {
                                     input_tx
                                         .send(InputCommand::JoinChannel(arg.to_string()))
                                         .await?;
+                                    let user_msg = format!("You: {}", input); // Display command as is
+                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
                                 }
                                 "/part" => {
                                     input_tx
                                         .send(InputCommand::PartChannel(arg.to_string()))
                                         .await?;
+                                    let user_msg = format!("You: {}", input); // Display command as is
+                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
                                 }
                                 "/msg" => {
                                     let mut msg_parts = arg.splitn(2, ' ');
                                     if let (Some(target), Some(message)) =
                                         (msg_parts.next(), msg_parts.next())
                                     {
+                                        let prefixed_message = prefix_message(message);
                                         input_tx
                                             .send(InputCommand::SendMessage {
                                                 target: target.to_string(),
-                                                message: message.to_string(),
+                                                message: prefixed_message.clone(), // Send the prefixed message
                                             })
                                             .await?;
+                                        let user_msg = format!("You: /msg {} {}", target, prefixed_message); // Display the command with prefixed message
+                                        messages.push_back(format_message(&user_msg, max_width, left_padding));
+                                    } else {
+                                        let user_msg = format!("You: {}", input); // Display original input if /msg format is wrong
+                                        messages.push_back(format_message(&user_msg, max_width, left_padding));
                                     }
                                 }
                                 "/quit" => {
                                     input_tx.send(InputCommand::Quit).await?;
                                     running = false;
+                                    let user_msg = format!("You: {}", input); // Display command as is
+                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
                                 }
                                 "/help" => {
                                     let help_lines = [
@@ -313,6 +337,8 @@ pub async fn run_ui(
                                             left_padding,
                                         ));
                                     }
+                                    let user_msg = format!("You: {}", input); // Display command as is
+                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
                                 }
                                 _ => {
                                     let unknown = format!("Unknown command: {}", cmd);
@@ -321,8 +347,16 @@ pub async fn run_ui(
                                         max_width,
                                         left_padding,
                                     ));
+                                    let user_msg = format!("You: {}", input); // Display command as is
+                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
                                 }
                             }
+                        } else {
+                            // This is for non-command messages
+                            let prefixed_input = prefix_message(&input);
+                            let user_msg = format!("You: {}", prefixed_input); // Apply prefixing for display
+                            messages.push_back(format_message(&user_msg, max_width, left_padding));
+                            input_tx.send(InputCommand::SendPlainMessage(prefixed_input)).await?; // Send prefixed message to IRC
                         }
 
                         input.clear();
