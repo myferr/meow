@@ -31,7 +31,7 @@ export default function Waitlist() {
       label: "Adding configurable themes in ~/.meow/config.toml",
     },
     {
-      status: "not-in-progress",
+      status: "inprogress",
       label: "Clean shutdown (e.g. Ctrl+C support)",
     },
     { status: "not-in-progress", label: "Windows and cross-platform builds" },
