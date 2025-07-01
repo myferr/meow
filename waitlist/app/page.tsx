@@ -34,6 +34,10 @@ export default function Waitlist() {
       status: "complete",
       label: "Emoji support via configurable aliases in ~/.meow/config.toml",
     },
+    {
+      status: "inprogress",
+      label: "Polish up the program",
+    },
     { status: "not-in-progress", label: "Windows and cross-platform builds" },
   ];
 

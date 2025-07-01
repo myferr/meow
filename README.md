@@ -34,4 +34,5 @@ Contributions to [meow](https://github.com/myferr/meow) are welcome and encourag
 - [x] Config file support (`~/.meow/config.toml`)
 - [x] Adding configurable themes in `~/.meow/config.toml`
 - [x] Emoji support via configurable aliases in `~/.meow/config.toml`
+- [ ] Polish up the program
 - [ ] Windows and cross-platform builds
