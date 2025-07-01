@@ -160,11 +160,13 @@ async fn connect_and_listen(
 
 /// Runs the IRC client logic, handling connect, join, messaging, and receiving.
 /// This function now also manages auto-reconnection.
+use crate::config::UserConfig;
 pub async fn run_irc(
     irc_tx: Sender<String>, // Sender for messages to be displayed in the UI
     input_tx: Sender<InputCommand>, // Sender for commands to the IRC client (e.g., from UI input)
     mut input_rx: Receiver<InputCommand>, // Receiver for commands from the UI
 ) -> Result<()> {
+    let user_config = UserConfig::load().unwrap_or_default();
     let mut client_opt: Option<Arc<Mutex<Client>>> = None; // Stores the active IRC client
     let mut current_channel: Option<String> = None; // Stores the currently joined channel (for rejoining)
     let mut last_config: Option<Config> = None; // Stores the configuration for the last successful connection
@@ -215,14 +217,20 @@ pub async fn run_irc(
                                     let client = Arc::clone(client);
                                     let tx_clone = irc_tx.clone();
                                     let target_clone = target.clone();
-                                    let message_clone = message.clone();
+                                    let mut processed_message = message.clone();
+
+                                    if let Some(emojis_config) = &user_config.emojis {
+                                        for (alias, emoji) in &emojis_config.aliases {
+                                            processed_message = processed_message.replace(&format!(":{}:", alias), emoji);
+                                        }
+                                    }
 
                                     tokio::spawn(async move {
                                         let locked = client.lock().await;
-                                        if let Err(e) = locked.send_privmsg(&target_clone, &message_clone) {
+                                        if let Err(e) = locked.send_privmsg(&target_clone, &processed_message) {
                                             let _ = tx_clone.send(format!("Error sending to {}: {}", target_clone, e)).await;
                                         } else {
-                                            let _ = tx_clone.send(format!("<You->{}> {}", target_clone, message_clone)).await;
+                                            let _ = tx_clone.send(format!("<You->{}> {}", target_clone, processed_message)).await;
                                         }
                                     });
                                 } else {
@@ -293,14 +301,20 @@ pub async fn run_irc(
                                         let client = Arc::clone(client);
                                         let tx_clone = irc_tx.clone();
                                         let channel_clone = channel.clone();
-                                        let message_clone = message.clone();
+                                        let mut processed_message = message.clone();
+
+                                        if let Some(emojis_config) = &user_config.emojis {
+                                            for (alias, emoji) in &emojis_config.aliases {
+                                                processed_message = processed_message.replace(&format!(":{}:", alias), emoji);
+                                            }
+                                        }
 
                                         tokio::spawn(async move {
                                             let locked = client.lock().await;
-                                            if let Err(e) = locked.send_privmsg(&channel_clone, &message_clone) {
+                                            if let Err(e) = locked.send_privmsg(&channel_clone, &processed_message) {
                                                 let _ = tx_clone.send(format!("Error sending: {}", e)).await;
                                             } else {
-                                                let _ = tx_clone.send(format!("<You ({}):> {}", channel_clone, message_clone)).await;
+                                                let _ = tx_clone.send(format!("<You ({}):> {}", channel_clone, processed_message)).await;
                                             }
                                         });
                                     }

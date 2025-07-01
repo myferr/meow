@@ -6,6 +6,7 @@ use std::path::PathBuf;
 pub struct UserConfig {
     pub irc: Option<IrcConfig>,
     pub theme: Option<ThemeConfig>,
+    pub emojis: Option<EmojiConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -22,6 +23,22 @@ pub struct IrcConfig {
     pub nick: Option<String>,
     pub port: Option<u16>,
     pub tls: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct EmojiConfig {
+    #[serde(flatten)]
+    pub aliases: std::collections::HashMap<String, String>,
+}
+
+impl Default for UserConfig {
+    fn default() -> Self {
+        UserConfig {
+            irc: None,
+            theme: None,
+            emojis: None,
+        }
+    }
 }
 
 impl UserConfig {

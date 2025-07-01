@@ -33,5 +33,5 @@ Contributions to [meow](https://github.com/myferr/meow) are welcome and encourag
 - [x] Graceful error handling (no panics or unwraps)
 - [x] Config file support (`~/.meow/config.toml`)
 - [x] Adding configurable themes in `~/.meow/config.toml`
-- [ ] Clean shutdown (e.g. Ctrl+C support)
+- [x] Emoji support via configurable aliases in `~/.meow/config.toml`
 - [ ] Windows and cross-platform builds
