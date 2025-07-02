@@ -132,10 +132,16 @@ jobs:
           name: meow-macos-x86_64
           path: ./release/macos/x86_64
 
+      - name: Download macOS x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: meow-macos-x86_64-apple-darwin
+          path: ./release/macos/x86_64
+
       - name: Download macOS aarch64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: meow-macos-aarch64
+          name: meow-macos-aarch64-apple-darwin
           path: ./release/macos/aarch64
 
       - name: Download Windows artifact
