@@ -2,3 +2,4 @@ waitlist/* linguist-vendored
 *.tsx linguist-vendored
 *.css linguist-vendored
 *.ts linguist-vendored
+.docker/* linguist-language=Dockerfile
