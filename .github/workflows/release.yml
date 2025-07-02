@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: meow
+            archive: meow-linux-x86_64.tar.gz
+            format: tar.gz
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            bin: meow
+            archive: meow-linux-aarch64.tar.gz
+            format: tar.gz
+
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bin: meow
+            archive: meow-macos-x86_64.zip
+            format: zip
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bin: meow
+            archive: meow-macos-aarch64.zip
+            format: zip
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: meow.exe
+            archive: meow-windows-x86_64.zip
+            format: zip
+
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bin: meow.exe
+            archive: meow-windows-aarch64.zip
+            format: zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install ARM toolchain (Linux only)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Set linker (for Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          mkdir -p .cargo
+          echo '[target.aarch64-unknown-linux-gnu]' >> .cargo/config.toml
+          echo 'linker = "aarch64-linux-gnu-gcc"' >> .cargo/config.toml
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.bin }} dist/
+          if [ "${{ matrix.format }}" = "zip" ]; then
+            zip -j ${{ matrix.archive }} dist/${{ matrix.bin }}
+          else
+            tar -czvf ${{ matrix.archive }} -C dist ${{ matrix.bin }}
+          fi
+        shell: bash
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten Artifacts
+        run: |
+          mkdir release
+          find dist -type f -exec mv {} release/ \;
+          ls -lh release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
