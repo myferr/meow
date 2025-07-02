@@ -1,4 +1,4 @@
-name: Release
+name: release ci/cd
 
 on:
   push:
@@ -15,22 +15,33 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install OpenSSL development libraries
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+
       - name: Install cross
         run: cargo install cross
 
       - name: Build x86_64-unknown-linux-gnu
+        env:
+          OPENSSL_STATIC: 1
         run: cross build --target x86_64-unknown-linux-gnu --release
 
       - name: Build aarch64-unknown-linux-gnu
+        env:
+          OPENSSL_STATIC: 1
         run: cross build --target aarch64-unknown-linux-gnu --release
 
-      - name: Upload Linux Artifacts
+      - name: Upload x86_64 Linux Binary
         uses: actions/upload-artifact@v4
         with:
-          name: linux-binaries
-          path: |
-            target/x86_64-unknown-linux-gnu/release/meow
-            target/aarch64-unknown-linux-gnu/release/meow
+          name: meow-linux-x86_64
+          path: target/x86_64-unknown-linux-gnu/release/meow
+
+      - name: Upload aarch64 Linux Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: meow-linux-aarch64
+          path: target/aarch64-unknown-linux-gnu/release/meow
 
   build-macos:
     name: Build macOS Binaries
@@ -48,13 +59,17 @@ jobs:
       - name: Build aarch64-apple-darwin
         run: cargo build --target aarch64-apple-darwin --release
 
-      - name: Upload macOS Artifacts
+      - name: Upload x86_64 macOS Binary
         uses: actions/upload-artifact@v4
         with:
-          name: macos-binaries
-          path: |
-            target/x86_64-apple-darwin/release/meow
-            target/aarch64-apple-darwin/release/meow
+          name: meow-macos-x86_64
+          path: target/x86_64-apple-darwin/release/meow
+
+      - name: Upload aarch64 macOS Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: meow-macos-aarch64
+          path: target/aarch64-apple-darwin/release/meow
 
   build-windows:
     name: Build Windows Binaries
@@ -68,10 +83,10 @@ jobs:
       - name: Build for Windows
         run: cargo build --target x86_64-pc-windows-msvc --release
 
-      - name: Upload Windows Artifacts
+      - name: Upload Windows Binary
         uses: actions/upload-artifact@v4
         with:
-          name: windows-binaries
+          name: meow-windows-x86_64
           path: target/x86_64-pc-windows-msvc/release/meow.exe
 
   release:
@@ -81,16 +96,35 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download Linux x86_64 binary
+        uses: actions/download-artifact@v4
         with:
-          path: ./artifacts
+          name: meow-linux-x86_64
+          path: ./release
 
-      - name: Rename and flatten binaries
-        run: |
-          mkdir release
-          cp artifacts/linux-binaries/* release/
-          cp artifacts/macos-binaries/* release/
-          cp artifacts/windows-binaries/* release/
+      - name: Download Linux aarch64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: meow-linux-aarch64
+          path: ./release
+
+      - name: Download macOS x86_64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: meow-macos-x86_64
+          path: ./release
+
+      - name: Download macOS aarch64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: meow-macos-aarch64
+          path: ./release
+
+      - name: Download Windows binary
+        uses: actions/download-artifact@v4
+        with:
+          name: meow-windows-x86_64
+          path: ./release
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
