@@ -7,104 +7,110 @@ on:
 
 jobs:
   build-linux:
+    name: Build Linux x86_64 native
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install OpenSSL dev libraries & pkg-config
+      - name: Install OpenSSL dev and pkg-config
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev
+          sudo apt-get install -y libssl-dev pkg-config curl build-essential
 
-      - name: Install Rust targets
-        run: rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup default stable
+          rustup component add rustfmt
 
-      - name: Install cross
-        run: cargo install cross
+      - name: Cache cargo registry and target
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Set environment variables for OpenSSL
-        env:
-          OPENSSL_DIR: /usr/lib/ssl
-          PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig
-          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
-          OPENSSL_INCLUDE_DIR: /usr/include/openssl
-          OPENSSL_STATIC: 1
-        run: echo "OpenSSL environment variables set"
+      - name: Build project for x86_64-unknown-linux-gnu
+        run: |
+          source $HOME/.cargo/env
+          cargo build --target x86_64-unknown-linux-gnu --release
 
-      - name: Build for x86_64-unknown-linux-gnu
-        env:
-          OPENSSL_DIR: /usr/lib/ssl
-          PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig
-          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
-          OPENSSL_INCLUDE_DIR: /usr/include/openssl
-          OPENSSL_STATIC: 1
-        run: cross build --target x86_64-unknown-linux-gnu --release
-
-      - name: Build for aarch64-unknown-linux-gnu
-        env:
-          OPENSSL_DIR: /usr/lib/ssl
-          PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig
-          OPENSSL_LIB_DIR: /usr/lib/aarch64-linux-gnu
-          OPENSSL_INCLUDE_DIR: /usr/include/openssl
-          OPENSSL_STATIC: 1
-        run: cross build --target aarch64-unknown-linux-gnu --release
-
-      - name: Upload x86_64 Linux binary
+      - name: Upload Linux binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: meow-linux-x86_64
           path: target/x86_64-unknown-linux-gnu/release/meow
 
-      - name: Upload aarch64 Linux binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: meow-linux-aarch64
-          path: target/aarch64-unknown-linux-gnu/release/meow
-
   build-macos:
     name: Build macOS Binaries
     runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust targets
-        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+      - name: Install Rust target ${{ matrix.target }}
+        run: rustup target add ${{ matrix.target }}
 
-      - name: Build x86_64
-        run: cargo build --target x86_64-apple-darwin --release
+      - name: Cache cargo registry and target
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.target }}
 
-      - name: Build aarch64
-        run: cargo build --target aarch64-apple-darwin --release
+      - name: Build for ${{ matrix.target }}
+        run: cargo build --target ${{ matrix.target }} --release
 
-      - name: Upload macOS x86_64 binary
+      - name: Upload macOS binary ${{ matrix.target }}
         uses: actions/upload-artifact@v4
         with:
-          name: meow-macos-x86_64
-          path: target/x86_64-apple-darwin/release/meow
-
-      - name: Upload macOS aarch64 binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: meow-macos-aarch64
-          path: target/aarch64-apple-darwin/release/meow
+          name: meow-macos-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/meow
 
   build-windows:
     name: Build Windows Binary
     runs-on: windows-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust target
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          $Env:CARGO_HOME = "$Env:USERPROFILE\.cargo"
+          $Env:PATH = "$Env:CARGO_HOME\bin;$Env:PATH"
+          rustup default stable
+          rustup component add rustfmt
+
+      - name: Install Rust target x86_64-pc-windows-msvc
         run: rustup target add x86_64-pc-windows-msvc
 
-      - name: Build
+      - name: Cache cargo registry and target
+        uses: actions/cache@v3
+        with:
+          path: |
+            $Env:USERPROFILE\.cargo\registry
+            $Env:USERPROFILE\.cargo\git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build for Windows
         run: cargo build --target x86_64-pc-windows-msvc --release
 
-      - name: Upload Windows binary
+      - name: Upload Windows binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: meow-windows-x86_64
-          path: target/x86_64-pc-windows-msvc/release/meow.exe
+          path: target\x86_64-pc-windows-msvc\release\meow.exe
 
   release:
     name: Publish GitHub Release
@@ -112,13 +118,37 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
-      - name: Download all artifacts
+      - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          path: ./release
+          name: meow-linux-x86_64
+          path: ./release/linux
 
-      - name: Publish GitHub Release
+      - name: Download macOS x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: meow-macos-x86_64
+          path: ./release/macos/x86_64
+
+      - name: Download macOS aarch64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: meow-macos-aarch64
+          path: ./release/macos/aarch64
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: meow-windows-x86_64
+          path: ./release/windows
+
+      - name: Create GitHub Release and upload binaries
         uses: softprops/action-gh-release@v2
         with:
-          files: release/**/*
+          files: |
+            release/linux/meow
+            release/macos/x86_64/meow
+            release/macos/aarch64/meow
+            release/windows/meow.exe
