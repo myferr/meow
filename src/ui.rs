@@ -11,9 +11,8 @@ use std::collections::VecDeque;
 use std::io::{stdout, Write};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::Duration;
-use unicode_segmentation::UnicodeSegmentation;
 
-fn parse_color(hex: &str) -> Option<Color> {
+pub fn parse_color(hex: &str) -> Option<Color> {
     let hex = hex.trim_start_matches('#');
     if hex.len() == 6 {
         if let Ok(rgb) = u32::from_str_radix(hex, 16) {
@@ -29,6 +28,7 @@ fn parse_color(hex: &str) -> Option<Color> {
 pub async fn run_ui(
     input_tx: Sender<InputCommand>,
     mut irc_rx: Receiver<String>,
+    accent_color_hex: Option<String>,
 ) -> anyhow::Result<()> {
     let config = UserConfig::load();
     let icons_enabled = config
@@ -43,9 +43,7 @@ pub async fn run_ui(
     let bg_color = theme
         .and_then(|t| t.background.as_deref())
         .and_then(parse_color);
-    let accent_color = theme
-        .and_then(|t| t.accent.as_deref())
-        .and_then(parse_color);
+    let accent_color = accent_color_hex.and_then(|hex| parse_color(&hex));
     let muted_color = theme.and_then(|t| t.muted.as_deref()).and_then(parse_color);
 
     enable_raw_mode()?;
@@ -70,30 +68,36 @@ pub async fn run_ui(
         let available_width = max_width.saturating_sub(left_padding);
         let mut lines = Vec::new();
         let mut current_line = String::new();
-        let mut current_len = 0;
+        let mut current_display_len = 0;
+        let mut in_ansi_sequence = false;
 
-        for grapheme in UnicodeSegmentation::graphemes(msg, true) {
-            let width = grapheme.chars().count();
-            if current_len + width > available_width {
-                lines.push(format!(
-                    "{:width$}{}",
-                    "",
-                    current_line,
-                    width = left_padding
-                ));
-                current_line.clear();
-                current_len = 0;
+        for c in msg.chars() {
+            if c == '\x1b' {
+                in_ansi_sequence = true;
+                current_line.push(c);
+            } else if in_ansi_sequence {
+                current_line.push(c);
+                if c.is_ascii_alphabetic() {
+                    // End of a simple ANSI sequence (e.g., 'm')
+                    in_ansi_sequence = false;
+                }
+            } else {
+                // Regular character
+                let char_display_width = 1; // Simplified: assume each character takes 1 display width
+                if current_display_len + char_display_width > available_width {
+                    let padded_line =
+                        format!("{:width$}{}", "", current_line, width = left_padding);
+                    lines.push(format!("{:<width$}", padded_line, width = max_width));
+                    current_line.clear();
+                    current_display_len = 0;
+                }
+                current_line.push(c);
+                current_display_len += char_display_width;
             }
-            current_line.push_str(grapheme);
-            current_len += width;
         }
         if !current_line.is_empty() {
-            lines.push(format!(
-                "{:width$}{}",
-                "",
-                current_line,
-                width = left_padding
-            ));
+            let padded_line = format!("{:width$}{}", "", current_line, width = left_padding);
+            lines.push(format!("{:<width$}", padded_line, width = max_width));
         }
         lines
     }
@@ -204,11 +208,23 @@ pub async fn run_ui(
 
         for (i, msg) in flat_messages.iter().take(end).skip(start).enumerate() {
             execute!(stdout, cursor::MoveTo(0, (i + 2) as u16))?;
-            writeln!(stdout, "{}", msg)?;
+            if let Some(bg) = bg_color {
+                execute!(
+                    stdout,
+                    SetBackgroundColor(bg),
+                    Clear(ClearType::CurrentLine)
+                )?;
+            }
+            execute!(stdout, cursor::MoveTo(left_padding as u16, (i + 2) as u16))?;
+            write!(stdout, "{}", msg)?;
+            writeln!(stdout)?;
         }
 
         execute!(stdout, cursor::MoveTo(0, (max_height + 2) as u16))?;
         writeln!(stdout)?;
+        if let Some(bg) = bg_color {
+            execute!(stdout, SetBackgroundColor(bg))?;
+        }
         if let Some(color) = muted_color {
             execute!(stdout, SetForegroundColor(color))?;
         } else {
@@ -219,6 +235,9 @@ pub async fn run_ui(
             )?;
         }
         for line in format_message(&format!("❯ {}", input), max_width, left_padding) {
+            if let Some(bg) = bg_color {
+                execute!(stdout, SetBackgroundColor(bg))?;
+            }
             writeln!(stdout, "{}", line)?;
         }
         execute!(stdout, SetForegroundColor(Color::Reset))?;
@@ -277,21 +296,33 @@ pub async fn run_ui(
                                         })
                                         .await?;
                                     let user_msg = format!("You: {}", input); // Display command as is
-                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
+                                    messages.push_back(format_message(
+                                        &user_msg,
+                                        max_width,
+                                        left_padding,
+                                    ));
                                 }
                                 "/join" => {
                                     input_tx
                                         .send(InputCommand::JoinChannel(arg.to_string()))
                                         .await?;
                                     let user_msg = format!("You: {}", input); // Display command as is
-                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
+                                    messages.push_back(format_message(
+                                        &user_msg,
+                                        max_width,
+                                        left_padding,
+                                    ));
                                 }
                                 "/part" => {
                                     input_tx
                                         .send(InputCommand::PartChannel(arg.to_string()))
                                         .await?;
                                     let user_msg = format!("You: {}", input); // Display command as is
-                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
+                                    messages.push_back(format_message(
+                                        &user_msg,
+                                        max_width,
+                                        left_padding,
+                                    ));
                                 }
                                 "/msg" => {
                                     let mut msg_parts = arg.splitn(2, ' ');
@@ -305,18 +336,31 @@ pub async fn run_ui(
                                                 message: prefixed_message.clone(), // Send the prefixed message
                                             })
                                             .await?;
-                                        let user_msg = format!("You: /msg {} {}", target, prefixed_message); // Display the command with prefixed message
-                                        messages.push_back(format_message(&user_msg, max_width, left_padding));
+                                        let user_msg =
+                                            format!("You: /msg {} {}", target, prefixed_message); // Display the command with prefixed message
+                                        messages.push_back(format_message(
+                                            &user_msg,
+                                            max_width,
+                                            left_padding,
+                                        ));
                                     } else {
                                         let user_msg = format!("You: {}", input); // Display original input if /msg format is wrong
-                                        messages.push_back(format_message(&user_msg, max_width, left_padding));
+                                        messages.push_back(format_message(
+                                            &user_msg,
+                                            max_width,
+                                            left_padding,
+                                        ));
                                     }
                                 }
                                 "/quit" => {
                                     input_tx.send(InputCommand::Quit).await?;
                                     running = false;
                                     let user_msg = format!("You: {}", input); // Display command as is
-                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
+                                    messages.push_back(format_message(
+                                        &user_msg,
+                                        max_width,
+                                        left_padding,
+                                    ));
                                 }
                                 "/help" => {
                                     let help_lines = [
@@ -338,7 +382,11 @@ pub async fn run_ui(
                                         ));
                                     }
                                     let user_msg = format!("You: {}", input); // Display command as is
-                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
+                                    messages.push_back(format_message(
+                                        &user_msg,
+                                        max_width,
+                                        left_padding,
+                                    ));
                                 }
                                 _ => {
                                     let unknown = format!("Unknown command: {}", cmd);
@@ -348,7 +396,11 @@ pub async fn run_ui(
                                         left_padding,
                                     ));
                                     let user_msg = format!("You: {}", input); // Display command as is
-                                    messages.push_back(format_message(&user_msg, max_width, left_padding));
+                                    messages.push_back(format_message(
+                                        &user_msg,
+                                        max_width,
+                                        left_padding,
+                                    ));
                                 }
                             }
                         } else {
@@ -356,7 +408,9 @@ pub async fn run_ui(
                             let prefixed_input = prefix_message(&input);
                             let user_msg = format!("You: {}", prefixed_input); // Apply prefixing for display
                             messages.push_back(format_message(&user_msg, max_width, left_padding));
-                            input_tx.send(InputCommand::SendPlainMessage(prefixed_input)).await?; // Send prefixed message to IRC
+                            input_tx
+                                .send(InputCommand::SendPlainMessage(prefixed_input))
+                                .await?; // Send prefixed message to IRC
                         }
 
                         input.clear();

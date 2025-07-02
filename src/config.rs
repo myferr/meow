@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
+use crossterm::style::Color;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct UserConfig {
@@ -56,5 +57,17 @@ impl UserConfig {
             .unwrap_or_else(|| PathBuf::from("/"))
             .join(".meow")
             .join("config.toml")
+    }
+}
+
+pub fn parse_color(hex: &str) -> Option<Color> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() == 6 {
+        let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+        let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+        let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+        Some(Color::Rgb { r, g, b })
+    } else {
+        None
     }
 }

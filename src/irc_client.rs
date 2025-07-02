@@ -1,4 +1,5 @@
 use crate::app::InputCommand;
+use crate::config::{parse_color, UserConfig};
 use anyhow::Result;
 use futures_util::stream::StreamExt;
 use irc::client::prelude::*;
@@ -10,163 +11,16 @@ use tokio::sync::{
 };
 use tokio::time::{sleep, Duration};
 
-/// Helper function to connect to the IRC server and start listening for messages.
-/// It spawns a new task to handle incoming messages and signals disconnects.
-async fn connect_and_listen(
-    config: Config,
-    irc_tx: Sender<String>,
-    input_tx: Sender<InputCommand>, // Sender to send commands back to the main loop (e.g., Disconnected)
-) -> Result<Arc<Mutex<Client>>> {
-    // Attempt to create a client from the provided configuration.
-    let client = Client::from_config(config).await?;
-    // Identify the client with the server (e.g., send NICK and USER commands).
-    client.identify()?;
-
-    // Wrap the client in Arc<Mutex> for thread-safe sharing across tasks.
-    let client_arc = Arc::new(Mutex::new(client));
-    // Clone for the spawned message processing task.
-    let client_clone_for_spawn = Arc::clone(&client_arc);
-    let tx_clone_for_spawn = irc_tx.clone();
-    let input_tx_clone_for_spawn = input_tx.clone(); // Clone input_tx for the spawned task
-
-    // --- FIX START ---
-    // Acquire a lock on the client to get its message stream *here*,
-    // before spawning the task. If this fails, connect_and_listen should return an error.
-    let stream = {
-        let mut locked_client = client_clone_for_spawn.lock().await;
-        locked_client.stream()? // Propagate the error if stream() fails
-    };
-    // --- FIX END ---
-
-    // Spawn a new asynchronous task to continuously read messages from the IRC stream.
-    tokio::spawn(async move {
-        let mut stream = stream; // Use the stream obtained above
-                                 // Loop to process each message received from the IRC server.
-        while let Some(message_result) = stream.next().await {
-            match message_result {
-                Ok(message) => {
-                    // Process different IRC commands and send formatted messages to the UI.
-                    match &message.command {
-                        Command::PING(server, _) => {
-                            let _ = tx_clone_for_spawn
-                                .send(format!("*** Ping: {}", server))
-                                .await;
-                        }
-                        Command::JOIN(channel, _, _) => {
-                            let prefix = message
-                                .prefix
-                                .as_ref()
-                                .map(|p| p.to_string())
-                                .unwrap_or_else(|| "unknown".to_string());
-                            let _ = tx_clone_for_spawn
-                                .send(format!("*** {} joined {}", prefix, channel))
-                                .await;
-                        }
-                        Command::PRIVMSG(target, msg) => {
-                            // Handle CTCP messages (e.g., ACTION, VERSION)
-                            if msg.starts_with('\x01') && msg.ends_with('\x01') {
-                                let ctcp = &msg[1..msg.len() - 1];
-                                let sender = message.source_nickname().unwrap_or("unknown");
-                                let _ = tx_clone_for_spawn
-                                    .send(format!("(CTCP) {}: {}", sender, ctcp))
-                                    .await;
-                            } else if let Some(sender) = message.source_nickname() {
-                                // Format regular private messages or channel messages.
-                                let formatted = if target.starts_with('#') {
-                                    format!("<{}> {}", sender, msg)
-                                } else {
-                                    format!("<{}->You> {}", sender, msg)
-                                };
-                                let _ = tx_clone_for_spawn.send(formatted).await;
-                            }
-                        }
-                        Command::NOTICE(target, msg) => {
-                            let _ = tx_clone_for_spawn
-                                .send(format!("(notice to {}): {}", target, msg))
-                                .await;
-                        }
-                        Command::Raw(cmd, params) if cmd == "MODE" => {
-                            let params_str = params.join(" ");
-                            let _ = tx_clone_for_spawn
-                                .send(format!("*** Mode: {}", params_str))
-                                .await;
-                        }
-                        Command::PART(channel, _) => {
-                            let _ = tx_clone_for_spawn
-                                .send(format!("*** Left channel {}", channel))
-                                .await;
-                        }
-                        Command::QUIT(reason) => {
-                            let reason_str = reason
-                                .as_ref()
-                                .map(|r| r.to_string())
-                                .unwrap_or_else(|| "Quit".to_string());
-                            if let Some(sender) = message.source_nickname() {
-                                let _ = tx_clone_for_spawn
-                                    .send(format!("*** {} quit: {}", sender, reason_str))
-                                    .await;
-                            }
-                        }
-                        Command::PONG(server, _) => {
-                            let _ = tx_clone_for_spawn
-                                .send(format!("*** Pong: {}", server))
-                                .await;
-                        }
-                        Command::Response(_code, params) => {
-                            // Handle numeric IRC responses (e.g., welcome messages, MOTD).
-                            let code = params.get(0).cloned().unwrap_or_else(|| "000".to_string());
-                            let msg = params.iter().skip(1).cloned().collect::<Vec<_>>().join(" ");
-                            let display = match code.as_str() {
-                                "001" => format!("*** Welcome: {}", msg),
-                                "375" | "372" | "376" => format!("*** MOTD: {}", msg),
-                                _ => format!("*** {}: {}", code, msg),
-                            };
-                            let _ = tx_clone_for_spawn.send(display).await;
-                        }
-                        _ => {
-                            // Log unhandled IRC commands for debugging.
-                            let _ = tx_clone_for_spawn
-                                .send(format!("*** Unhandled: {:?}", message.command))
-                                .await;
-                        }
-                    }
-                }
-                Err(e) => {
-                    // If an error occurs while receiving a message, it indicates a disconnect.
-                    let _ = tx_clone_for_spawn
-                        .send(format!(
-                            "Error receiving message: {}. Signaling disconnect...",
-                            e
-                        ))
-                        .await;
-                    let _ = input_tx_clone_for_spawn
-                        .send(InputCommand::Disconnected)
-                        .await; // Signal disconnect to main loop
-                    return; // Exit the spawned task as the stream is broken
-                }
-            }
-        }
-        // If the stream gracefully closes (e.g., server shutdown without error), also signal disconnect.
-        let _ = tx_clone_for_spawn
-            .send("*** IRC stream closed. Signaling disconnect...".into())
-            .await;
-        let _ = input_tx_clone_for_spawn
-            .send(InputCommand::Disconnected)
-            .await; // Signal disconnect
-    });
-
-    Ok(client_arc) // Return the client only if stream acquisition and task spawning were successful
-}
-
 /// Runs the IRC client logic, handling connect, join, messaging, and receiving.
 /// This function now also manages auto-reconnection.
-use crate::config::UserConfig;
 pub async fn run_irc(
     irc_tx: Sender<String>, // Sender for messages to be displayed in the UI
     input_tx: Sender<InputCommand>, // Sender for commands to the IRC client (e.g., from UI input)
     mut input_rx: Receiver<InputCommand>, // Receiver for commands from the UI
+    accent_color_hex: Option<String>,
 ) -> Result<()> {
     let user_config = UserConfig::load().unwrap_or_default();
+    let accent_color = accent_color_hex.and_then(|hex| parse_color(&hex));
     let mut client_opt: Option<Arc<Mutex<Client>>> = None; // Stores the active IRC client
     let mut current_channel: Option<String> = None; // Stores the currently joined channel (for rejoining)
     let mut last_config: Option<Config> = None; // Stores the configuration for the last successful connection
@@ -191,7 +45,7 @@ pub async fn run_irc(
                                 };
 
                                 // Attempt to connect and start listening using the helper function.
-                                match connect_and_listen(config.clone(), irc_tx.clone(), input_tx.clone()).await {
+                                match connect_and_listen(config.clone(), irc_tx.clone(), input_tx.clone(), accent_color.clone()).await {
                                     Ok(client) => {
                                         // On successful connection, update client_opt and store the config.
                                         irc_tx.send(format!(
@@ -230,7 +84,12 @@ pub async fn run_irc(
                                         if let Err(e) = locked.send_privmsg(&target_clone, &processed_message) {
                                             let _ = tx_clone.send(format!("Error sending to {}: {}", target_clone, e)).await;
                                         } else {
-                                            let _ = tx_clone.send(format!("<You->{}> {}", target_clone, processed_message)).await;
+                                            let color_code = if let Some(crossterm::style::Color::Rgb { r, g, b }) = accent_color {
+                                                format!("38;2;{};{};{}", r, g, b)
+                                            } else {
+                                                "38;2;128;0;128".to_string() // Default purple
+                                            };
+                                            let _ = tx_clone.send(format!("\x1b[1m\x1b[{}m<You->{}>\x1b[0m {}", color_code, target_clone, processed_message)).await;
                                         }
                                     });
                                 } else {
@@ -314,7 +173,12 @@ pub async fn run_irc(
                                             if let Err(e) = locked.send_privmsg(&channel_clone, &processed_message) {
                                                 let _ = tx_clone.send(format!("Error sending: {}", e)).await;
                                             } else {
-                                                let _ = tx_clone.send(format!("<You ({}):> {}", channel_clone, processed_message)).await;
+                                                let color_code = if let Some(crossterm::style::Color::Rgb { r, g, b }) = accent_color {
+                                                    format!("38;2;{};{};{}", r, g, b)
+                                                } else {
+                                                    "38;2;128;0;128".to_string() // Default purple
+                                                };
+                                                let _ = tx_clone.send(format!("\x1b[1m\x1b[{}m<You ({}) :>\x1b[0m {}", color_code, channel_clone, processed_message)).await;
                                             }
                                         });
                                     }
@@ -338,7 +202,7 @@ pub async fn run_irc(
                                         sleep(Duration::from_secs(delay_secs as u64)).await;
 
                                         // Attempt to reconnect using the stored configuration.
-                                        match connect_and_listen(config_to_reconnect.clone(), irc_tx.clone(), input_tx.clone()).await {
+                                        match connect_and_listen(config_to_reconnect.clone(), irc_tx.clone(), input_tx.clone(), accent_color.clone()).await {
                                             Ok(new_client) => {
                                                 irc_tx.send(format!("*** Reconnected successfully!")).await?;
                                                 client_opt = Some(new_client); // Set the new client
@@ -357,8 +221,6 @@ pub async fn run_irc(
                                                                 let _ = tx_rejoin.send(format!("*** Rejoined {}", channel_rejoin)).await;
                                                             }
                                                         });
-                                                    } else {
-                                                        let _ = irc_tx.send("Warning: Could not rejoin channel - client not available".to_string()).await;
                                                     }
                                                 }
                                                 break; // Break out of the reconnection loop
@@ -384,4 +246,78 @@ pub async fn run_irc(
     }
 
     Ok(())
+}
+
+async fn connect_and_listen(
+    config: Config,
+    irc_tx: Sender<String>,
+    input_tx: Sender<InputCommand>,
+    accent_color: Option<crossterm::style::Color>,
+) -> Result<Arc<Mutex<Client>>> {
+    let mut client = Client::from_config(config).await?;
+    client.identify()?;
+
+    let client = Arc::new(Mutex::new(client));
+    let client_clone = Arc::clone(&client);
+    let irc_tx_clone = irc_tx.clone();
+    let input_tx_clone = input_tx.clone();
+
+    tokio::spawn(async move {
+        let mut stream = match client_clone.lock().await.stream() {
+            Ok(s) => s,
+            Err(e) => {
+                let _ = irc_tx_clone
+                    .send(format!("Error getting IRC stream: {}", e))
+                    .await;
+                let _ = input_tx_clone.send(InputCommand::Disconnected).await;
+                return;
+            }
+        };
+        loop {
+            select! {
+                // Handle IRC messages
+                maybe_message = stream.next() => {
+                    if let Some(Ok(message)) = maybe_message {
+                        match message.command {
+                            Command::PRIVMSG(target, msg) => {
+                                if let Some(ref prefix) = message.prefix {
+                                    let prefix_str = prefix.to_string();
+                                    let parts: Vec<&str> = prefix_str.split('!').collect();
+                                    let nick = parts[0];
+
+
+                                    let color_code = if let Some(crossterm::style::Color::Rgb { r, g, b }) = accent_color {
+                                        format!("38;2;{};{};{}", r, g, b)
+                                    } else {
+                                        "38;2;128;0;128".to_string() // Default purple
+                                    };
+
+                                    let _ = irc_tx_clone.send(format!("\x1b[1m\x1b[{}m<{}>\x1b[0m {}", color_code, nick, msg)).await;
+                                }
+                            }
+                            Command::PING(param, _) => {
+                                // Respond to PING to keep the connection alive
+                                let _ = client_clone.lock().await.send_pong(&param);
+                            }
+                            Command::ERROR(e) => {
+                                let _ = irc_tx_clone.send(format!("IRC Error: {}", e)).await;
+                                let _ = input_tx_clone.send(InputCommand::Disconnected).await; // Signal disconnection
+                                break; // Exit message processing loop on error
+                            }
+                            _ => {
+                                // For other messages, just display them as is for now.
+                                let _ = irc_tx_clone.send(format!("{}", message.to_string())).await;
+                            }
+                        }
+                    } else {
+                        // Stream ended, meaning disconnected.
+                        let _ = input_tx_clone.send(InputCommand::Disconnected).await; // Signal disconnection
+                        break; // Exit message processing loop
+                    }
+                }
+            }
+        }
+    });
+
+    Ok(client)
 }

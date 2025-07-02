@@ -11,6 +11,7 @@ use crossterm::{
 };
 use std::io::{stdout, Write};
 use tokio::sync::mpsc;
+use crate::config::UserConfig;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -25,18 +26,24 @@ async fn main() -> Result<()> {
     let (irc_tx, ui_rx) = mpsc::channel::<String>(100);
     let (ui_tx, input_rx) = mpsc::channel::<InputCommand>(100);
 
+    let config = UserConfig::load();
+    let accent_color_hex = config
+        .as_ref()
+        .and_then(|cfg| cfg.theme.as_ref()?.accent.clone());
+
     // Spawn IRC logic
     let irc_handle = tokio::spawn({
         let ui_tx = ui_tx.clone();
+        let accent_color_hex_for_irc = accent_color_hex.clone();
         async move {
-            if let Err(e) = irc_client::run_irc(irc_tx, ui_tx, input_rx).await {
+            if let Err(e) = irc_client::run_irc(irc_tx, ui_tx, input_rx, accent_color_hex_for_irc).await {
                 eprintln!("IRC client error: {:?}", e);
             }
         }
     });
 
     // Run the terminal UI
-    if let Err(e) = ui::run_ui(ui_tx, ui_rx).await {
+    if let Err(e) = ui::run_ui(ui_tx, ui_rx, accent_color_hex).await {
         eprintln!("UI error: {:?}", e);
     }
 
