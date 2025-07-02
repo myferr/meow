@@ -1,7 +1,7 @@
+use crossterm::style::Color;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
-use crossterm::style::Color;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct UserConfig {
@@ -53,10 +53,24 @@ impl UserConfig {
     }
 
     fn config_path() -> PathBuf {
-        dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("/"))
-            .join(".meow")
-            .join("config.toml")
+        #[cfg(target_os = "windows")]
+        {
+            // Use %USERPROFILE%\meowconf\config.toml
+            if let Some(home) = std::env::var_os("USERPROFILE") {
+                return PathBuf::from(home).join("meowconf").join("config.toml");
+            }
+        }
+
+        // Default to ~/.meow/config.toml on *NIX systems
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Some(home) = dirs::home_dir() {
+                return home.join(".meow").join("config.toml");
+            }
+        }
+
+        // Fallback
+        PathBuf::from("config.toml")
     }
 }
 
