@@ -24,11 +24,11 @@ jobs:
 
       - name: Build x86_64-unknown-linux-gnu Docker image
         run: |
-          docker build -t meow-cross-x86_64 -f .docker/dockerfile.cross .
+          docker build -t meow-cross-x86_64 -f .docker/Dockerfile.cross .
 
       - name: Build aarch64-unknown-linux-gnu Docker image
         run: |
-          docker build -t meow-cross-aarch64 -f .docker/dockerfile.cross.aarch64 .
+          docker build -t meow-cross-aarch64 -f .docker/Dockerfile.cross.aarch64 .
 
       - name: Build x86_64-unknown-linux-gnu binary
         env:
