@@ -15,30 +15,21 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # Install OpenSSL dev libs on runner (harmless)
       - name: Install OpenSSL development libraries
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
 
       - name: Install cross
         run: cargo install cross
 
-      - name: Build x86_64-unknown-linux-gnu Docker image
-        run: |
-          docker build -t meow-cross-x86_64 -f .docker/Dockerfile.cross .
-
-      - name: Build aarch64-unknown-linux-gnu Docker image
-        run: |
-          docker build -t meow-cross-aarch64 -f .docker/Dockerfile.cross.aarch64 .
-
-      - name: Build x86_64-unknown-linux-gnu binary
+      - name: Build x86_64-unknown-linux-gnu
         env:
           OPENSSL_STATIC: 1
-        run: cross build --target x86_64-unknown-linux-gnu --release --image meow-cross-x86_64
+        run: cross build --target x86_64-unknown-linux-gnu --release
 
-      - name: Build aarch64-unknown-linux-gnu binary
+      - name: Build aarch64-unknown-linux-gnu
         env:
           OPENSSL_STATIC: 1
-        run: cross build --target aarch64-unknown-linux-gnu --release --image meow-cross-aarch64
+        run: cross build --target aarch64-unknown-linux-gnu --release
 
       - name: Upload x86_64 Linux Binary
         uses: actions/upload-artifact@v4
