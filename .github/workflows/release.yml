@@ -73,7 +73,7 @@ jobs:
       - name: Upload macOS binary ${{ matrix.target }}
         uses: actions/upload-artifact@v4
         with:
-          name: meow-macos-${{ matrix.target }}
+          name: ${{ matrix.target == 'x86_64-apple-darwin' && 'meow-macos-x86_64' || 'meow-macos-aarch64' }}
           path: target/${{ matrix.target }}/release/meow
 
   build-windows:
@@ -132,16 +132,10 @@ jobs:
           name: meow-macos-x86_64
           path: ./release/macos/x86_64
 
-      - name: Download macOS x86_64 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: meow-macos-x86_64-apple-darwin
-          path: ./release/macos/x86_64
-
       - name: Download macOS aarch64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: meow-macos-aarch64-apple-darwin
+          name: meow-macos-aarch64
           path: ./release/macos/aarch64
 
       - name: Download Windows artifact
