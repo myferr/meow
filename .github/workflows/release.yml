@@ -73,7 +73,7 @@ jobs:
       - name: Upload macOS binary ${{ matrix.target }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target == 'x86_64-apple-darwin' && 'meow-macos-x86_64' || 'meow-macos-aarch64' }}
+          name: meow-macos-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/meow
 
   build-windows:
@@ -129,13 +129,13 @@ jobs:
       - name: Download macOS x86_64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: meow-macos-x86_64
+          name: meow-macos-x86_64-apple-darwin
           path: ./release/macos/x86_64
 
       - name: Download macOS aarch64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: meow-macos-aarch64
+          name: meow-macos-aarch64-apple-darwin
           path: ./release/macos/aarch64
 
       - name: Download Windows artifact
@@ -144,11 +144,18 @@ jobs:
           name: meow-windows-x86_64
           path: ./release/windows
 
+      - name: Rename all binaries for release
+        run: |
+          mv release/linux/meow release/meow-linux-x86_64
+          mv release/macos/x86_64/meow release/meow-macos-x86_64
+          mv release/macos/aarch64/meow release/meow-macos-aarch64
+          mv release/windows/meow.exe release/meow-windows-x86_64.exe
+
       - name: Create GitHub Release and upload binaries
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/linux/meow
-            release/macos/x86_64/meow
-            release/macos/aarch64/meow
-            release/windows/meow.exe
+            release/meow-linux-x86_64
+            release/meow-macos-x86_64
+            release/meow-macos-aarch64
+            release/meow-windows-x86_64.exe
