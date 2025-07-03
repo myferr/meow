@@ -38,7 +38,7 @@ export default function Waitlist() {
       status: "complete",
       label: "Polish up the program",
     },
-    { status: "inprogress", label: "Windows and cross-platform builds" },
+    { status: "complete", label: "Windows and cross-platform builds" },
   ];
 
   const statusColorMap: Record<string, string> = {
