@@ -1,21 +1,100 @@
 # meow
+[![CI](https://github.com/myferr/meow/actions/workflows/release.yml/badge.svg)](https://github.com/myferr/meow/actions/workflows/release.yml)
+[![Latest Release](https://img.shields.io/github/v/release/myferr/meow?label=latest&style=flat-square)](https://github.com/myferr/meow/releases/latest)
+[![License](https://img.shields.io/github/license/myferr/meow?style=flat-square)](LICENSE)
 
-**meow** is a terminal-based IRC (**I**nternet **R**elay **C**hat) client written in Rust, with built-in support for TLS and SSL.
-
-[Join the waitlist!](https://meow-irc.vercel.app)
+**meow** is a fast, terminal-based IRC client written in Rust.
 
 ---
 
-## Disclaimer
+## Installation
 
-This project is currently in active development. Please do not use it in production yet, the project is not ready for daily usage. You're welcome to contribute, thank you!
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/myferr/meow/main/scripts/install.ps1 | iex
+```
+
+### Linux / macOS (Bash)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/myferr/meow/main/scripts/install.sh | bash
+```
+
+Make sure `~/.local/bin` is in your `PATH` if you're on a Unix-based (*NIX) system.
+
+---
+
+## Binary Downloads
+
+Prebuilt binaries for **Linux**, **macOS (Intel & Apple Silicon)**, and **Windows** are available on the [Releases page](https://github.com/myferr/meow/releases/latest).
+
+---
+
+## Usage
+
+```bash
+meow                                                       # Start interactive experience
+
+# Use the following commands while in interactive mode using meow
+
+/connect <server> <port> <nickname> <tls? (true/false)>    # connect to a server, you can configure a default port, nick, and TLS option if you don't want to fill it out.
+
+/join <#channel>                                           # join a channel
+/part <#channel>                                           # leave a channel
+
+/msg <#channel>/<user> <message>                           # send a PRIVMSG to a channel or user.
+
+/quit                                                      # exit the program
+```
+
+You can configure defaults in:
+
+```toml
+# ~/.meow/config.toml
+
+[irc]
+nick = "mycat"
+tls = true
+port = 6697
+
+[theme]
+background = "" # hex code (optional)
+foreground = "" # hex code (optional)
+muted = "" # hex code (optional)
+accent = "" # hex code (optional)
+icons = true  # enable Nerd Font icons (optional)
+
+[emojis]
+shrug = "¯\\_(ツ)_/¯" # use like :shrug: in /msg commands.
+cat = ":3" # use like :cat: in /msg commands.
+```
+> Windows systems use `%USERPROFILE%/meowconf/config.toml`
+
+The config file is 100% optional. Channel/server are passed via CLI.
+
+---
+
+## Features
+
+ Clean & readable terminal UI
+*  Scrollback + input history
+* Auto-reconnect
+* Nerd Font icons (optional)
+* Zero external config required
+
+---
+
+## License
+
+Licensed under the **MIT License**.
+See [LICENSE](LICENSE) for details.
 
 ---
 
 ## Contributing
-Contributions to [meow](https://github.com/myferr/meow) are welcome and encouraged! Before you contribute please read [CONTRIBUTING.md](CONTRIBUTING.md).
 
----
+See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## To-do
 
