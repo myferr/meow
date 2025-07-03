@@ -115,3 +115,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md)
 - [x] Emoji support via configurable aliases in `~/.meow/config.toml`
 - [x] Polish up the program
 - [x] Windows and cross-platform builds
+
+## Other stuff :3
+* [MAKEFILE.md](MAKEFILE.md)
+* [CONTRIBUTING.md](CONTRIBUTING.md)
